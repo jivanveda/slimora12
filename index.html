@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Vaidyakart — Sugar Control Powder | Ayurvedic Blood Sugar Management</title>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;700;800&family=Hind:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --green:#1a7a4a;
+  --green2:#22a05a;
+  --gold:#d4a017;
+  --dark:#0f1e15;
+  --light:#f5f0e8;
+  --white:#ffffff;
+  --red:#e03030;
+  --orange:#e07020;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Hind',sans-serif;background:var(--light);color:var(--dark)}
+h1,h2,h3,h4{font-family:'Baloo 2',cursive}
+
+/* ANNOUNCEMENT BAR */
+.ann-bar{background:var(--green);color:#fff;text-align:center;padding:10px;font-size:14px;font-weight:600;letter-spacing:.3px}
+.ann-bar span{margin:0 12px}
+
+/* HEADER */
+header{background:var(--dark);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,.4)}
+.logo{font-family:'Baloo 2',cursive;font-size:22px;color:var(--gold);font-weight:800;letter-spacing:.5px}
+.logo span{color:#fff}
+.header-btn{background:var(--green2);color:#fff;border:none;padding:9px 20px;border-radius:6px;font-weight:700;cursor:pointer;font-size:14px}
+
+/* OFFER POPUP */
+.offer-popup{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:2000;align-items:center;justify-content:center;backdrop-filter:blur(6px)}
+.offer-popup.show{display:flex}
+.offer-box{background:linear-gradient(135deg,#0f1e15,#1a3025);border:2px solid var(--gold);border-radius:24px;padding:36px 28px;max-width:420px;width:90%;text-align:center;position:relative;animation:offerPop .4s cubic-bezier(.34,1.56,.64,1)}
+@keyframes offerPop{from{transform:scale(.7);opacity:0}to{transform:scale(1);opacity:1}}
+.offer-close{position:absolute;top:14px;right:18px;background:none;border:none;color:rgba(255,255,255,.5);font-size:22px;cursor:pointer}
+.offer-timer{background:var(--red);color:#fff;border-radius:10px;padding:8px 16px;font-size:22px;font-weight:800;font-family:'Baloo 2',cursive;margin:12px 0;letter-spacing:2px;display:inline-block}
+.offer-box h2{font-size:26px;color:var(--gold);margin-bottom:6px}
+.offer-box p{color:rgba(255,255,255,.8);font-size:15px;margin-bottom:16px;line-height:1.6}
+.offer-grab-btn{background:linear-gradient(135deg,var(--gold),#b8860b);color:var(--dark);border:none;padding:14px 30px;border-radius:10px;font-size:17px;font-weight:800;font-family:'Baloo 2',cursive;cursor:pointer;width:100%;margin-top:6px}
+.offer-skip{color:rgba(255,255,255,.35);font-size:12px;cursor:pointer;margin-top:10px;display:block}
+
+/* URGENCY BAR */
+.urgency-bar{background:linear-gradient(90deg,#7f1d1d,#b91c1c);color:#fff;text-align:center;padding:8px 16px;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:10px}
+.urgency-countdown{background:rgba(0,0,0,.3);padding:2px 10px;border-radius:12px;font-family:'Baloo 2',cursive;font-size:15px;letter-spacing:1px}
+
+/* HERO */
+.hero{background:linear-gradient(135deg,var(--dark) 0%,#1a3025 100%);color:#fff;padding:40px 20px 50px;text-align:center;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;top:-60px;right:-60px;width:300px;height:300px;background:radial-gradient(circle,rgba(34,160,90,.25) 0%,transparent 70%);border-radius:50%}
+.hero-badge{display:inline-block;background:var(--gold);color:var(--dark);font-weight:800;padding:5px 16px;border-radius:20px;font-size:13px;margin-bottom:14px;font-family:'Baloo 2',cursive}
+.hero h1{font-size:clamp(26px,6vw,46px);line-height:1.2;margin-bottom:10px;font-weight:800}
+.hero h1 span{color:var(--gold)}
+.hero-tagline{font-size:16px;opacity:.85;margin-bottom:6px;font-family:'Hind',sans-serif}
+.hero-tagline-en{font-size:14px;opacity:.65;margin-bottom:24px}
+.price-box{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:24px;flex-wrap:wrap}
+.price-main{font-size:42px;font-weight:800;font-family:'Baloo 2',cursive;color:#fff}
+.price-mrp{font-size:20px;text-decoration:line-through;opacity:.5}
+.price-save{background:var(--red);color:#fff;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:700}
+.order-btn{background:linear-gradient(135deg,var(--green2),var(--green));color:#fff;border:none;padding:16px 40px;border-radius:10px;font-size:18px;font-weight:800;font-family:'Baloo 2',cursive;cursor:pointer;box-shadow:0 6px 24px rgba(26,122,74,.5);transition:transform .2s;width:100%;max-width:360px;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}
+.order-btn:hover{transform:scale(1.04)}
+.trust-row{display:flex;justify-content:center;flex-wrap:wrap;gap:12px;margin-top:20px}
+.trust-badge{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.1);padding:7px 14px;border-radius:20px;font-size:13px;font-weight:600}
+.trust-badge span{font-size:16px}
+
+/* GALLERY */
+.gallery-wrap{position:relative;width:min(340px,92vw);margin:0 auto 24px}
+.gallery-track{display:flex;overflow:hidden;border-radius:16px;background:rgba(255,255,255,.08);width:100%;position:relative}
+.gallery-slide{min-width:100%;width:100%;aspect-ratio:4/5;display:flex;align-items:center;justify-content:center;flex-shrink:0;position:absolute;top:0;left:0;transition:opacity .4s ease;opacity:0}.gallery-slide.active{position:relative;opacity:1}
+.gallery-slide img{width:100%;height:100%;object-fit:contain;border-radius:16px;display:block;background:rgba(255,255,255,.05)}
+.gallery-slide .gallery-placeholder{width:100%;aspect-ratio:1/1;background:linear-gradient(135deg,var(--green) 0%,var(--green2) 100%);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:90px}
+.gallery-dots{display:flex;justify-content:center;gap:8px;margin-top:10px}
+.gallery-dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.3);cursor:pointer;transition:.3s;border:none;padding:0}
+.gallery-dot.active{background:#fff;transform:scale(1.2)}
+.gallery-arrows{position:absolute;top:50%;transform:translateY(-50%);width:100%;display:flex;justify-content:space-between;padding:0 8px;pointer-events:none}
+.gallery-arrow{pointer-events:all;background:rgba(0,0,0,.45);color:#fff;border:none;width:32px;height:32px;border-radius:50%;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.2s;backdrop-filter:blur(4px)}
+.gallery-arrow:hover{background:rgba(0,0,0,.7)}
+.gallery-arrow.hide{opacity:0;pointer-events:none}
+
+/* SECTIONS */
+section{padding:50px 20px}
+.section-title{text-align:center;font-size:clamp(22px,5vw,34px);font-weight:800;margin-bottom:8px;color:var(--dark)}
+.section-subtitle{text-align:center;color:#555;margin-bottom:36px;font-size:15px}
+.green-line{width:60px;height:4px;background:var(--green2);border-radius:2px;margin:10px auto 20px}
+
+/* BENEFITS */
+.benefits-bg{background:#fff}
+.benefits-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:20px;max-width:800px;margin:0 auto}
+.benefit-card{background:var(--light);border-radius:14px;padding:24px 16px;text-align:center;border:2px solid transparent;transition:.25s}
+.benefit-card:hover{border-color:var(--green2);transform:translateY(-3px)}
+.benefit-icon{font-size:38px;margin-bottom:12px}
+.benefit-card h4{font-size:14px;font-weight:700;color:var(--dark);font-family:'Baloo 2',cursive}
+
+/* HOW IT WORKS */
+.how-grid{display:flex;flex-wrap:wrap;justify-content:center;gap:24px;max-width:900px;margin:0 auto}
+.how-step{background:#fff;border-radius:16px;padding:30px 24px;text-align:center;flex:1;min-width:220px;max-width:280px;box-shadow:0 4px 20px rgba(0,0,0,.08)}
+.step-num{width:40px;height:40px;background:var(--green2);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;font-family:'Baloo 2',cursive;margin:0 auto 14px}
+.how-step h3{font-size:16px;margin-bottom:8px;color:var(--dark)}
+.how-step p{font-size:13px;color:#666;line-height:1.6}
+.step-icon{font-size:36px;margin-bottom:12px}
+
+/* INGREDIENTS */
+.ingredients-bg{background:var(--dark);color:#fff}
+.ingredients-bg .section-title{color:#fff}
+.ingredients-bg .section-subtitle{color:rgba(255,255,255,.65)}
+.ingr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:16px;max-width:900px;margin:0 auto}
+.ingr-card{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:20px 12px;text-align:center}
+.ingr-icon{font-size:32px;margin-bottom:8px}
+.ingr-card h4{font-size:13px;font-weight:700;color:var(--gold)}
+.ingr-card p{font-size:11px;color:rgba(255,255,255,.55);margin-top:4px}
+
+/* TESTIMONIALS */
+.reviews-bg{background:#fff}
+.reviews-grid{display:flex;flex-wrap:wrap;justify-content:center;gap:20px;max-width:960px;margin:0 auto}
+.review-card{background:var(--light);border-radius:16px;padding:24px;flex:1;min-width:250px;max-width:300px;border-left:4px solid var(--green2);position:relative}
+.review-card.video-card{min-width:280px;max-width:320px}
+.stars{color:var(--gold);font-size:16px;margin-bottom:10px}
+.review-text{font-size:14px;color:#444;line-height:1.7;margin-bottom:14px;font-style:italic}
+.reviewer{display:flex;align-items:center;gap:10px}
+.reviewer-avatar{width:40px;height:40px;border-radius:50%;background:var(--green2);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;font-family:'Baloo 2',cursive;flex-shrink:0}
+.reviewer-info h4{font-size:14px;font-weight:700}
+.reviewer-info p{font-size:12px;color:#888}
+.verified{color:var(--green2);font-size:11px;font-weight:600;margin-top:2px}
+/* Video testimonial */
+.video-thumb{width:100%;border-radius:12px;overflow:hidden;margin-bottom:14px;position:relative;background:#000;cursor:pointer}
+.video-thumb iframe{width:100%;height:160px;border:none;border-radius:12px;display:block}
+.video-play-btn{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:54px;height:54px;background:rgba(255,255,255,.9);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;pointer-events:none}
+
+/* SOCIAL PROOF STRIP */
+.social-proof{background:var(--green);color:#fff;padding:16px 20px;text-align:center}
+.social-proof-inner{display:flex;justify-content:center;flex-wrap:wrap;gap:24px;max-width:800px;margin:0 auto}
+.sp-item{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700}
+.sp-num{font-size:22px;font-family:'Baloo 2',cursive}
+
+/* FAQ */
+.faq-list{max-width:700px;margin:0 auto}
+.faq-item{background:#fff;border-radius:12px;margin-bottom:12px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.06)}
+.faq-q{padding:18px 20px;font-weight:700;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-size:15px;color:var(--dark)}
+.faq-q .arrow{transition:.3s;color:var(--green2);font-size:18px}
+.faq-q.open .arrow{transform:rotate(180deg)}
+.faq-a{max-height:0;overflow:hidden;transition:.3s;padding:0 20px;font-size:14px;color:#555;line-height:1.7}
+.faq-a.open{max-height:200px;padding:0 20px 18px}
+
+/* FOOTER */
+footer{background:var(--dark);color:#fff;padding:40px 20px;text-align:center}
+.footer-logo{font-family:'Baloo 2',cursive;font-size:24px;color:var(--gold);font-weight:800;margin-bottom:12px}
+.footer-badges{display:flex;justify-content:center;flex-wrap:wrap;gap:16px;margin:16px 0}
+.footer-badge{display:flex;align-items:center;gap:6px;font-size:13px;opacity:.8}
+.footer-bottom{margin-top:24px;font-size:12px;opacity:.4}
+
+/* MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;backdrop-filter:blur(4px)}
+.modal-overlay.active{display:flex;align-items:center;justify-content:center;padding:16px}
+.modal{background:#fff;border-radius:20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto}
+.modal-header{background:linear-gradient(135deg,var(--dark),#1a3025);color:#fff;padding:20px 24px;border-radius:20px 20px 0 0;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:5}
+.modal-header h2{font-size:20px;font-family:'Baloo 2',cursive}
+.modal-close{background:none;border:none;color:#fff;font-size:24px;cursor:pointer;opacity:.8}
+.modal-body{padding:24px}
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--dark)}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:12px 14px;border:2px solid #e0e0e0;border-radius:8px;font-size:15px;font-family:'Hind',sans-serif;outline:none;transition:.2s}
+.form-group input:focus,.form-group select:focus{border-color:var(--green2)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.order-summary{background:var(--light);border-radius:12px;padding:16px;margin-bottom:20px}
+.order-summary h4{font-size:14px;font-weight:700;margin-bottom:10px;color:var(--green)}
+.summary-row{display:flex;justify-content:space-between;font-size:14px;margin-bottom:6px;color:#555}
+.summary-total{display:flex;justify-content:space-between;font-size:18px;font-weight:800;font-family:'Baloo 2',cursive;margin-top:10px;padding-top:10px;border-top:2px dashed #ccc;color:var(--dark)}
+.submit-btn{background:linear-gradient(135deg,var(--green2),var(--green));color:#fff;border:none;width:100%;padding:16px;border-radius:10px;font-size:18px;font-weight:800;font-family:'Baloo 2',cursive;cursor:pointer;transition:.2s}
+.submit-btn:hover{opacity:.9}
+.submit-btn:disabled{opacity:.6;cursor:not-allowed}
+
+/* SUCCESS */
+.success-screen{text-align:center;padding:40px 24px}
+.success-icon{font-size:64px;margin-bottom:16px;animation:bounce .6s}
+@keyframes bounce{0%,100%{transform:scale(1)}50%{transform:scale(1.2)}}
+.success-screen h2{font-size:26px;color:var(--green);margin-bottom:8px;font-family:'Baloo 2',cursive}
+.success-screen p{color:#555;font-size:15px;line-height:1.7;margin-bottom:6px}
+.order-id-box{background:var(--light);border-radius:10px;padding:14px;margin:16px 0;font-family:monospace;font-size:14px;color:var(--dark);font-weight:700}
+.hindi-msg{background:linear-gradient(135deg,#e8f5ee,#d4edda);border:1px solid var(--green2);border-radius:10px;padding:14px;margin-top:14px;font-size:15px;color:var(--green);font-weight:600}
+
+/* LIVE VISITOR BADGE */
+.visitor-bar{display:flex;align-items:center;justify-content:center;gap:8px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:24px;padding:8px 18px;margin:0 auto 20px;width:fit-content;font-size:13px;font-weight:600;color:#fff;backdrop-filter:blur(6px)}
+.visitor-dot{width:8px;height:8px;border-radius:50%;background:#4ade80;box-shadow:0 0 0 0 rgba(74,222,128,.6);animation:visitorPulse 1.5s infinite}
+@keyframes visitorPulse{0%{box-shadow:0 0 0 0 rgba(74,222,128,.6)}70%{box-shadow:0 0 0 8px rgba(74,222,128,0)}100%{box-shadow:0 0 0 0 rgba(74,222,128,0)}}
+.visitor-cities{font-size:11px;opacity:.7;margin-top:2px;text-align:center}
+
+/* STICKY BUY BTN */
+.sticky-btn{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--dark);padding:12px 20px;z-index:500;box-shadow:0 -4px 20px rgba(0,0,0,.3)}
+.sticky-btn button{width:100%;background:linear-gradient(135deg,var(--green2),var(--green));color:#fff;border:none;padding:14px;border-radius:10px;font-size:17px;font-weight:800;font-family:'Baloo 2',cursive;cursor:pointer}
+
+/* PINCODE */
+.pincode-info{font-size:12px;color:var(--green);margin-top:4px;font-weight:600}
+.pincode-loading{font-size:12px;color:#888;margin-top:4px}
+.pincode-invalid{font-size:12px;color:var(--red);margin-top:4px;font-weight:600}
+.form-group input.input-error{border-color:var(--red)!important}
+
+/* NOTIFICATION TOAST */
+.notif-toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--dark);color:#fff;padding:10px 20px;border-radius:24px;font-size:13px;font-weight:600;z-index:800;opacity:0;transition:.4s;pointer-events:none;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,.4);border-left:3px solid var(--green2)}
+.notif-toast.show{opacity:1}
+
+/* RESULTS TICKER */
+.results-ticker{background:#fff8e6;border:1px solid var(--gold);border-radius:10px;padding:14px 18px;margin:20px auto;max-width:600px;text-align:center;font-size:14px;color:var(--dark);font-weight:600;line-height:1.8}
+
+@media(max-width:600px){
+  .form-row{grid-template-columns:1fr}
+  .how-step{min-width:100%}
+  .gallery-wrap{width:min(300px,90vw)}
+}
+</style>
+</head>
+<body>
+
+<!-- Announcement Bar -->
+<div class="ann-bar">
+  <span>🌿 100% Ayurvedic</span>
+  <span>🚚 FREE Shipping All India</span>
+  <span>💵 COD Available</span>
+  <span>📦 Secure Packaging</span>
+</div>
+
+<!-- Urgency bar -->
+<div class="urgency-bar">
+  🔥 Sirf aaj ke liye — Special Price! Offer khatam hogi:
+  <span class="urgency-countdown" id="urgencyTimer">09:59</span>
+</div>
+
+<!-- Header -->
+<header>
+  <div class="logo">Vaidya<span>kart</span></div>
+  <button class="header-btn" onclick="openModal()">Order Now — COD</button>
+</header>
+
+<!-- Hero -->
+<div class="hero">
+  <div class="hero-badge">🌟 India Ka #1 Ayurvedic Sugar Control Formula</div>
+  <h1 id="heroTitle">Sugar Control <span>Powder</span></h1>
+  <p class="hero-tagline">शुगर को जड़ से नियंत्रित करो — प्राकृतिक जड़ी-बूटियों से</p>
+  <p class="hero-tagline-en">12 Powerful Ayurvedic Herbs se Blood Sugar Control karo — Bilkul naturally!</p>
+
+  <div class="gallery-wrap" id="galleryWrap">
+    <div class="gallery-track" id="galleryTrack"></div>
+    <div class="gallery-arrows">
+      <button class="gallery-arrow hide" id="galleryPrev" onclick="galleryMove(-1)">&#8249;</button>
+      <button class="gallery-arrow hide" id="galleryNext" onclick="galleryMove(1)">&#8250;</button>
+    </div>
+  </div>
+  <div class="gallery-dots" id="galleryDots"></div>
+
+  <div class="price-box">
+    <span class="price-main" id="heroPrice">₹599</span>
+    <span class="price-mrp" id="heroMrp">₹1,299</span>
+    <span class="price-save" id="heroDiscount">54% OFF</span>
+  </div>
+
+  <div class="visitor-bar" id="visitorBar">
+    <div class="visitor-dot"></div>
+    <span id="visitorCount">127</span> log abhi yeh page dekh rahe hain!
+  </div>
+  <div class="visitor-cities" id="visitorCities" style="color:rgba(255,255,255,.6);font-size:12px;margin-bottom:16px">🏙️ Delhi • Mumbai • Jaipur • Lucknow • Pune</div>
+  <button class="order-btn" onclick="openModal()">🛒 Abhi Order Karo — Cash on Delivery</button>
+
+  <div class="trust-row">
+    <div class="trust-badge"><span>💵</span> COD Available</div>
+    <div class="trust-badge"><span>🚚</span> Free Shipping</div>
+    <div class="trust-badge"><span>🌿</span> 100% Ayurvedic</div>
+    <div class="trust-badge"><span>⭐</span> 4.8/5 Rating</div>
+  </div>
+</div>
+
+<!-- Social Proof Strip -->
+<div class="social-proof">
+  <div class="social-proof-inner">
+    <div class="sp-item">🎯 <div><div class="sp-num">50,000+</div>Khush Customers</div></div>
+    <div class="sp-item">⭐ <div><div class="sp-num">4.8/5</div>Average Rating</div></div>
+    <div class="sp-item">📦 <div><div class="sp-num">1,20,000+</div>Orders Delivered</div></div>
+    <div class="sp-item">🌿 <div><div class="sp-num">Zero</div>Side Effects</div></div>
+  </div>
+</div>
+
+<!-- Results Ticker -->
+<div class="results-ticker">
+  🏆 <strong>Kuch recent results:</strong> Ramesh Ji (Delhi) — Sugar 280 → 138 in 6 weeks &nbsp;|&nbsp;
+  Sunita Devi (Lucknow) — HbA1c 9.2 → 7.1 in 2 months &nbsp;|&nbsp;
+  Mohammed Ansari (Hyderabad) — Fasting 210 → 120 in 45 days 🔥
+</div>
+
+<!-- Benefits -->
+<section class="benefits-bg">
+  <h2 class="section-title">Kyun Chunein Vaidyakart Sugar Control Powder?</h2>
+  <div class="green-line"></div>
+  <p class="section-subtitle">50,000+ customers ne trust kiya — aap bhi try karo!</p>
+  <div class="benefits-grid" id="benefitsGrid">
+    <div class="benefit-card"><div class="benefit-icon">🩸</div><h4>Blood Sugar Ko Naturally Control Karo</h4></div>
+    <div class="benefit-card"><div class="benefit-icon">💪</div><h4>Insulin Sensitivity Badhao</h4></div>
+    <div class="benefit-card"><div class="benefit-icon">🍬</div><h4>Sugar Cravings Kam Karo</h4></div>
+    <div class="benefit-card"><div class="benefit-icon">🫀</div><h4>Pancreas Ki Health Improve Karo</h4></div>
+    <div class="benefit-card"><div class="benefit-icon">⚡</div><h4>Energy Level Badhao — Thakaan Khatam!</h4></div>
+    <div class="benefit-card"><div class="benefit-icon">✅</div><h4>Zero Side Effects — 100% Safe</h4></div>
+  </div>
+</section>
+
+<!-- How it Works -->
+<section>
+  <h2 class="section-title">Kaise Use Karein?</h2>
+  <div class="green-line"></div>
+  <p class="section-subtitle">Sirf 3 simple steps — aur results guaranteed!</p>
+  <div class="how-grid">
+    <div class="how-step"><div class="step-num">1</div><div class="step-icon">🥄</div><h3>1 Chamach Lo</h3><p>Ek glass mein ek teaspoon Sugar Control Powder daalo</p></div>
+    <div class="how-step"><div class="step-num">2</div><div class="step-icon">💧</div><h3>Garam Paani Mein Milao</h3><p>Achhe se mix karo — gungune paani mein ghol do</p></div>
+    <div class="how-step"><div class="step-num">3</div><div class="step-icon">🌅</div><h3>Subah Khali Pet Piyo</h3><p>Roz subah khali pet piyo — 4-6 hafte mein results dekho!</p></div>
+  </div>
+</section>
+
+<!-- Ingredients -->
+<section class="ingredients-bg">
+  <h2 class="section-title">12 Powerful Ayurvedic Herbs</h2>
+  <div class="green-line"></div>
+  <p class="section-subtitle">Purani Ayurvedic wisdom + Modern science = Zero chemicals!</p>
+  <div class="ingr-grid">
+    <div class="ingr-card"><div class="ingr-icon">🌿</div><h4>Karela</h4><p>Glucose control ka champion</p></div>
+    <div class="ingr-card"><div class="ingr-icon">🫐</div><h4>Jamun</h4><p>Sugar absorption kam kare</p></div>
+    <div class="ingr-card"><div class="ingr-icon">🌾</div><h4>Methi</h4><p>Insulin sensitivity boost kare</p></div>
+    <div class="ingr-card"><div class="ingr-icon">🍃</div><h4>Giloy</h4><p>Immunity aur metabolism</p></div>
+    <div class="ingr-card"><div class="ingr-icon">🌱</div><h4>Vijaysar</h4><p>Pancreas regeneration</p></div>
+    <div class="ingr-card"><div class="ingr-icon">🍀</div><h4>Neem</h4><p>Blood purification</p></div>
+    <div class="ingr-card"><div class="ingr-icon">🍊</div><h4>Amla</h4><p>Vitamin C se bharpoor</p></div>
+    <div class="ingr-card"><div class="ingr-icon">🌿</div><h4>Gurmar</h4><p>"Sugar destroyer" herb</p></div>
+    <div class="ingr-card"><div class="ingr-icon">⚕️</div><h4>Ashwagandha</h4><p>Stress aur cortisol balance</p></div>
+    <div class="ingr-card"><div class="ingr-icon">🌳</div><h4>Haritaki</h4><p>Digestive health</p></div>
+    <div class="ingr-card"><div class="ingr-icon">🌰</div><h4>Bibhitaki</h4><p>Anti-inflammatory</p></div>
+    <div class="ingr-card"><div class="ingr-icon">💚</div><h4>Amalaki</h4><p>Antioxidant powerhouse</p></div>
+  </div>
+</section>
+
+<!-- CTA Section Mid-page -->
+<section style="background:linear-gradient(135deg,var(--green),var(--dark));text-align:center;padding:40px 20px">
+  <h2 style="color:var(--gold);font-size:28px;margin-bottom:10px">Abhi Order Karo — Stock Limited Hai!</h2>
+  <p style="color:rgba(255,255,255,.8);margin-bottom:20px;font-size:15px">Hazaron logon ne apni zindagi badal li — aapki baari hai! COD available, free delivery!</p>
+  <button class="order-btn" onclick="openModal()" style="margin:0 auto;display:block;animation:pulse 2s infinite">🛒 Order Now — ₹599 Only</button>
+</section>
+
+<!-- Reviews / Testimonials -->
+<section class="reviews-bg">
+  <h2 class="section-title">Real Log, Real Results! 🎉</h2>
+  <div class="green-line"></div>
+  <p class="section-subtitle">Inke real reviews padho aur khud decide karo!</p>
+  <div class="reviews-grid" id="reviewsGrid">
+    <!-- Hardcoded defaults shown until API loads -->
+    <div class="review-card">
+      <div class="stars">★★★★★</div>
+      <p class="review-text">"Meri sugar 280 se ghatkar 140 aa gayi 6 hafton mein! Yeh powder sach mein kaam karta hai. Koi side effect bhi nahi tha!"</p>
+      <div class="reviewer"><div class="reviewer-avatar">R</div><div class="reviewer-info"><h4>Ramesh Gupta</h4><p>Delhi, India</p><div class="verified">✅ Verified Purchase</div></div></div>
+    </div>
+    <div class="review-card">
+      <div class="stars">★★★★★</div>
+      <p class="review-text">"Doctor ne insulin recommend ki thi, lekin pehle ye try kiya. 2 mahine mein sugar level bahut improve ho gayi. Bahut shukriya Vaidyakart!"</p>
+      <div class="reviewer"><div class="reviewer-avatar">S</div><div class="reviewer-info"><h4>Salma Begum</h4><p>Lucknow, UP</p><div class="verified">✅ Verified Purchase</div></div></div>
+    </div>
+    <div class="review-card">
+      <div class="stars">★★★★☆</div>
+      <p class="review-text">"My mother has been using this for 2 months now. Her fasting sugar went from 220 to 140. Natural aur effective — zaroor try karein!"</p>
+      <div class="reviewer"><div class="reviewer-avatar">P</div><div class="reviewer-info"><h4>Priya Sharma</h4><p>Mumbai, MH</p><div class="verified">✅ Verified Purchase</div></div></div>
+    </div>
+  </div>
+  <div style="text-align:center;margin-top:30px">
+    <button class="order-btn" onclick="openModal()" style="display:inline-block;animation:none;background:linear-gradient(135deg,var(--green2),var(--green))">
+      🌿 Main Bhi Try Karna Chahta/Chahti Hoon!
+    </button>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section>
+  <h2 class="section-title">Aksar Pooche Jane Wale Sawaal</h2>
+  <div class="green-line"></div>
+  <div class="faq-list">
+    <div class="faq-item"><div class="faq-q" onclick="toggleFaq(this)">Kya yeh sabhi types ke diabetics ke liye safe hai? <span class="arrow">▼</span></div><div class="faq-a">Haan, humara formula 100% Ayurvedic hai aur Type 1 aur Type 2 dono diabetics ke liye safe hai. Agar aap prescribed medication par hain, toh use karne se pehle apne doctor se zaroor poochein.</div></div>
+    <div class="faq-item"><div class="faq-q" onclick="toggleFaq(this)">Kitne time mein results dikhenge? <span class="arrow">▼</span></div><div class="faq-a">Zyaadatar customers 3-4 hafte ke regular use mein blood sugar readings mein improvement dekhte hain. Best results ke liye kam se kam 6 hafte daily use karein.</div></div>
+    <div class="faq-item"><div class="faq-q" onclick="toggleFaq(this)">Kya COD (Cash on Delivery) available hai? <span class="arrow">▼</span></div><div class="faq-a">Haan! Hum poore India mein 100% Cash on Delivery offer karte hain. Payment tabhi karein jab product aapke ghar pahunche!</div></div>
+    <div class="faq-item"><div class="faq-q" onclick="toggleFaq(this)">Order kab milega? <span class="arrow">▼</span></div><div class="faq-a">Orders 24 ghante mein dispatch ho jaate hain aur aapki location ke hisaab se 4-7 business days mein deliver ho jaate hain.</div></div>
+    <div class="faq-item"><div class="faq-q" onclick="toggleFaq(this)">Kya koi side effects hain? <span class="arrow">▼</span></div><div class="faq-a">Koi side effects nahi! Humara formula sirf natural Ayurvedic herbs use karta hai — koi chemicals, steroids ya artificial additives nahi. Long-term use ke liye bhi bilkul safe hai.</div></div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="footer-logo">Vaidyakart</div>
+  <p style="opacity:.6;font-size:14px;margin-bottom:4px">India Ka Most Trusted Ayurvedic Health Brand</p>
+  <div class="footer-badges">
+    <div class="footer-badge">💵 Cash on Delivery</div>
+    <div class="footer-badge">🚚 Free Shipping</div>
+    <div class="footer-badge">🌿 100% Ayurvedic</div>
+    <div class="footer-badge">🔒 Secure Orders</div>
+  </div>
+  <div class="footer-bottom">© 2025 Vaidyakart. All rights reserved.</div>
+</footer>
+
+<!-- Sticky Button -->
+<div class="sticky-btn" id="stickyBtn">
+  <button id="stickyBtnInner" onclick="openModal()">🛒 Abhi Order Karo — ₹599 (Cash on Delivery)</button>
+</div>
+
+<!-- Notification Toast -->
+<div class="notif-toast" id="notifToast"></div>
+
+<!-- ─── OFFER POPUP ─────────────────────────────── -->
+<div class="offer-popup" id="offerPopup">
+  <div class="offer-box">
+    <button class="offer-close" onclick="closeOffer()">✕</button>
+    <div style="font-size:40px;margin-bottom:8px">🎁</div>
+    <h2>Sirf Aaj Ki Special Deal!</h2>
+    <p>Yeh offer sirf <strong style="color:var(--gold)">limited time</strong> ke liye available hai!<br>
+    Abhi order karo aur <strong style="color:#4ade80">FREE Shipping + 54% OFF</strong> pao!</p>
+    <div class="offer-timer" id="offerTimer">10:00</div>
+    <p style="font-size:13px;color:rgba(255,255,255,.6);margin-bottom:8px">⚡ 47 log abhi is offer ko dekh rahe hain</p>
+    <button class="offer-grab-btn" onclick="closeOffer();openModal()">🛒 Yeh Offer Grab Karo!</button>
+    <span class="offer-skip" onclick="closeOffer()">Nahi chahiye, miss karna chahta/chahti hoon</span>
+  </div>
+</div>
+
+<!-- ─── ORDER MODAL ─────────────────────────────── -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modal">
+    <div class="modal-header">
+      <h2>🛒 Apna Order Place Karo</h2>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody">
+      <div class="order-summary">
+        <h4>📦 Order Summary</h4>
+        <div class="summary-row"><span>Product</span><span id="sumProduct">Sugar Control Powder</span></div>
+        <div class="summary-row"><span>Quantity</span><span id="sumQty">1 Pack</span></div>
+        <div class="summary-row"><span>Price per unit</span><span id="sumUnitPrice">₹599</span></div>
+        <div class="summary-total"><span>Total Amount</span><span id="sumTotal">₹599</span></div>
+      </div>
+      <div class="form-group">
+        <label>Aapka Poora Naam *</label>
+        <input type="text" id="fname" placeholder="Ramesh Sharma" />
+      </div>
+      <div class="form-group">
+        <label>Mobile Number *</label>
+        <input type="tel" id="fphone" placeholder="10-digit mobile number" maxlength="10" inputmode="numeric" />
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Quantity *</label>
+          <select id="fqty" onchange="updateSummary()">
+            <option value="1">1 Pack</option>
+            <option value="2">2 Packs</option>
+            <option value="3">3 Packs</option>
+            <option value="4">4 Packs</option>
+            <option value="5">5 Packs</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Pincode *</label>
+          <input type="text" id="fpincode" placeholder="6-digit pincode" maxlength="6" oninput="onPincodeInput()" inputmode="numeric" pattern="\d{6}" />
+          <div id="pincodeInfo" class="pincode-info" style="display:none"></div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>City</label>
+          <input type="text" id="fcity" placeholder="Auto-filled" readonly />
+        </div>
+        <div class="form-group">
+          <label>State</label>
+          <input type="text" id="fstate" placeholder="Auto-filled" readonly />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Poora Address *</label>
+        <input type="text" id="faddress" placeholder="Ghar ka Number, Gali, Mohalla" />
+      </div>
+      <!-- Landmark is hidden from label — just a placeholder, optional -->
+      <input type="text" id="flandmark" placeholder="Landmark — e.g. School ke paas (optional)" style="width:100%;padding:12px 14px;border:2px solid #e0e0e0;border-radius:8px;font-size:15px;font-family:'Hind',sans-serif;outline:none;margin-bottom:16px" />
+      <button class="submit-btn" id="submitBtn" onclick="submitOrder()">
+        ✅ Order Confirm Karo — Cash on Delivery
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API_BASE = 'https://jughasd.onrender.com';
+
+let productData = {
+  name: 'Sugar Control Powder', price: 599, mrp: 1299,
+  images: [], productId: 'vk-scp-001', product: 'sugar-control-powder',
+  benefits: [], howToUse: ''
+};
+
+// ── URGENCY COUNTDOWN ─────────────────────────────────────────────────
+(function() {
+  let secs = 9 * 60 + 59;
+  function tick() {
+    const m = String(Math.floor(secs / 60)).padStart(2,'0');
+    const s = String(secs % 60).padStart(2,'0');
+    const el = document.getElementById('urgencyTimer');
+    if (el) el.textContent = m + ':' + s;
+    if (secs > 0) secs--; else secs = 9 * 60 + 59;
+  }
+  tick();
+  setInterval(tick, 1000);
+})();
+
+// ── OFFER POPUP ───────────────────────────────────────────────────────
+let offerShown = false;
+let offerSecs = 10 * 60;
+let offerTimerInterval = null;
+
+function showOfferPopup() {
+  if (offerShown) return;
+  offerShown = true;
+  document.getElementById('offerPopup').classList.add('show');
+  offerTimerInterval = setInterval(() => {
+    offerSecs--;
+    const m = String(Math.floor(offerSecs / 60)).padStart(2,'0');
+    const s = String(offerSecs % 60).padStart(2,'0');
+    const el = document.getElementById('offerTimer');
+    if (el) el.textContent = m + ':' + s;
+    if (offerSecs <= 0) { clearInterval(offerTimerInterval); closeOffer(); }
+  }, 1000);
+}
+
+function closeOffer() {
+  document.getElementById('offerPopup').classList.remove('show');
+  clearInterval(offerTimerInterval);
+}
+
+// Show popup after 8 seconds
+setTimeout(showOfferPopup, 8000);
+
+// Also show on exit intent
+document.addEventListener('mouseleave', (e) => {
+  if (e.clientY < 50 && !offerShown) showOfferPopup();
+});
+
+// ── NOTIFICATION TOASTS (social proof) ───────────────────────────────
+const recentBuyers = [
+  'Delhi se Suresh Ji ne abhi order kiya! 🛒',
+  'Lucknow se Anjali Devi ne order place kiya! ✅',
+  'Mumbai se Vikram Ji ne 2 packs order kiye! 📦',
+  'Jaipur se Meena Devi ne order confirm kiya! 🎉',
+  'Hyderabad se Mohammad Ji ne order kiya! 🛒',
+  'Pune se Kavita Ji ne abhi order diya! ✅',
+  'Chandigarh se Harpreet Ji ne 3 packs liye! 📦',
+];
+let buyerIdx = 0;
+function showBuyerToast() {
+  const toast = document.getElementById('notifToast');
+  toast.textContent = recentBuyers[buyerIdx % recentBuyers.length];
+  toast.classList.add('show');
+  buyerIdx++;
+  setTimeout(() => toast.classList.remove('show'), 3000);
+}
+setTimeout(() => { showBuyerToast(); setInterval(showBuyerToast, 12000); }, 5000);
+
+// ── GALLERY ───────────────────────────────────────────────────────────
+let galleryIndex = 0, galleryImages = [];
+
+function buildGallery(images) {
+  galleryImages = images.filter(Boolean);
+  const track = document.getElementById('galleryTrack');
+  const dots  = document.getElementById('galleryDots');
+  const prev  = document.getElementById('galleryPrev');
+  const next  = document.getElementById('galleryNext');
+  if (!galleryImages.length) {
+    track.innerHTML = `<div class="gallery-slide"><div class="gallery-placeholder">🌿</div></div>`;
+    dots.innerHTML = ''; prev.classList.add('hide'); next.classList.add('hide'); return;
+  }
+  track.innerHTML = galleryImages.map((src, i) =>
+    `<div class="gallery-slide${i===0?' active':''}" id="gslide${i}">
+       <img src="${src}" alt="Product image ${i+1}" onerror="this.parentElement.innerHTML='<div class=\\'gallery-placeholder\\'>🌿</div>'"/>
+     </div>`
+  ).join('');
+  dots.innerHTML = galleryImages.length > 1
+    ? galleryImages.map((_,i)=>`<button class="gallery-dot${i===0?' active':''}" onclick="galleryGoTo(${i})"></button>`).join('')
+    : '';
+  prev.classList.toggle('hide', galleryImages.length <= 1);
+  next.classList.toggle('hide', galleryImages.length <= 1);
+  galleryIndex = 0; renderGallery();
+  let touchStartX = 0;
+  track.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; }, { passive: true });
+  track.addEventListener('touchend', e => { const dx = e.changedTouches[0].clientX - touchStartX; if (Math.abs(dx) > 40) galleryMove(dx < 0 ? 1 : -1); }, { passive: true });
+}
+
+function galleryMove(dir) {
+  if (!galleryImages.length) return;
+  galleryIndex = (galleryIndex + dir + galleryImages.length) % galleryImages.length;
+  renderGallery();
+}
+function galleryGoTo(idx) { galleryIndex = idx; renderGallery(); }
+function renderGallery() {
+  document.querySelectorAll('.gallery-slide').forEach((s,i) => s.classList.toggle('active', i===galleryIndex));
+  document.querySelectorAll('.gallery-dot').forEach((d,i) => d.classList.toggle('active', i===galleryIndex));
+  if (galleryImages.length > 1) {
+    document.getElementById('galleryPrev').classList.remove('hide');
+    document.getElementById('galleryNext').classList.remove('hide');
+  }
+}
+
+// ── LOAD PRODUCT ──────────────────────────────────────────────────────
+async function loadProduct() {
+  try {
+    const r = await fetch(API_BASE + '/api/products');
+    const d = await r.json();
+    if (d.success && d.products && d.products.length) {
+      const p = d.products[0];
+      productData.name      = p.name      || productData.name;
+      productData.price     = p.price     || productData.price;
+      productData.mrp       = p.mrp       || productData.mrp;
+      productData.images    = p.images    || [];
+      productData.benefits  = p.benefits  || [];
+      productData.howToUse  = p.howToUse  || '';
+      productData.productId = p._id       || productData.productId;
+      productData.product   = p.name.toLowerCase().replace(/\s+/g,'-');
+      const discount = Math.round((1 - productData.price / productData.mrp) * 100);
+      document.getElementById('heroPrice').textContent     = '₹' + productData.price;
+      document.getElementById('heroMrp').textContent       = '₹' + productData.mrp.toLocaleString('en-IN');
+      document.getElementById('heroDiscount').textContent  = discount + '% OFF';
+      document.getElementById('heroTitle').innerHTML       = p.name.replace(/(\w+)\s+(\w+)/, '$1 <span>$2</span>');
+      document.getElementById('sumProduct').textContent    = p.name;
+      document.getElementById('sumUnitPrice').textContent  = '₹' + productData.price;
+      document.getElementById('sumTotal').textContent      = '₹' + productData.price;
+      document.getElementById('stickyBtnInner').textContent = '🛒 Abhi Order Karo — ₹' + productData.price + ' (COD)';
+      if (productData.benefits.length) {
+        const icons = ['🩸','💪','🍬','🫀','⚡','✅','🌿','🔬'];
+        document.getElementById('benefitsGrid').innerHTML = productData.benefits.map((b,i) =>
+          `<div class="benefit-card"><div class="benefit-icon">${icons[i%icons.length]}</div><h4>${b}</h4></div>`
+        ).join('');
+      }
+    }
+  } catch(e) {}
+  buildGallery(productData.images);
+}
+
+// ── LOAD TESTIMONIALS ─────────────────────────────────────────────────
+async function loadTestimonials() {
+  try {
+    const r = await fetch(API_BASE + '/api/testimonials');
+    const d = await r.json();
+    if (d.success && d.testimonials && d.testimonials.length) {
+      const grid = document.getElementById('reviewsGrid');
+      grid.innerHTML = d.testimonials.map(t => {
+        const stars = '★'.repeat(t.rating || 5) + '☆'.repeat(5 - (t.rating || 5));
+        const avatar = t.avatarLetter || (t.name || 'V')[0].toUpperCase();
+        const videoHtml = t.videoUrl
+          ? `<div class="video-thumb"><iframe src="${t.videoUrl}" allowfullscreen loading="lazy"></iframe></div>`
+          : '';
+        return `<div class="review-card ${t.videoUrl ? 'video-card' : ''}">
+          ${videoHtml}
+          <div class="stars">${stars}</div>
+          <p class="review-text">"${t.text}"</p>
+          <div class="reviewer">
+            <div class="reviewer-avatar">${avatar}</div>
+            <div class="reviewer-info"><h4>${t.name}</h4><p>${t.location || ''}</p><div class="verified">✅ Verified Purchase</div></div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  } catch(e) {}
+}
+
+// ── META PIXEL ────────────────────────────────────────────────────────
+async function loadPixel() {
+  try {
+    const r = await fetch(API_BASE + '/api/meta');
+    const d = await r.json();
+    if (d.success && d.metaPixel) {
+      const s = document.createElement('script');
+      s.innerHTML = `!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('init','${d.metaPixel}');fbq('track','PageView');`;
+      document.head.appendChild(s);
+    }
+  } catch(e){}
+}
+
+// ── STICKY SCROLL ─────────────────────────────────────────────────────
+window.addEventListener('scroll', () => {
+  document.getElementById('stickyBtn').style.display = window.scrollY > 400 ? 'block' : 'none';
+});
+
+// ── FAQ ───────────────────────────────────────────────────────────────
+function toggleFaq(el) {
+  el.classList.toggle('open');
+  el.nextElementSibling.classList.toggle('open');
+}
+
+// ── MODAL ─────────────────────────────────────────────────────────────
+function openModal() {
+  document.getElementById('modalOverlay').classList.add('active');
+  if (window.fbq) fbq('track', 'InitiateCheckout');
+}
+function closeModal() { document.getElementById('modalOverlay').classList.remove('active'); }
+document.getElementById('modalOverlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('modalOverlay')) closeModal();
+});
+
+// ── ORDER SUMMARY ─────────────────────────────────────────────────────
+function updateSummary() {
+  const qty = parseInt(document.getElementById('fqty').value);
+  document.getElementById('sumQty').textContent   = qty + ' Pack' + (qty > 1 ? 's' : '');
+  document.getElementById('sumTotal').textContent = '₹' + (qty * productData.price).toLocaleString('en-IN');
+}
+
+// ── VISITOR PING ──────────────────────────────────────────────────────
+(function() {
+  const sessionId = 'vk_' + Math.random().toString(36).slice(2) + Date.now();
+  function ping() { fetch(API_BASE + '/api/visitors/ping', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ sessionId, page:'/' }) }).catch(()=>{}); }
+  ping();
+  setInterval(ping, 25000);
+})();
+
+// ── PINCODE ───────────────────────────────────────────────────────────
+let _pincodeValid = false;
+
+function onPincodeInput() {
+  const pin = document.getElementById('fpincode').value.replace(/\D/g,'');
+  document.getElementById('fpincode').value = pin;
+  const info = document.getElementById('pincodeInfo');
+  if (pin.length !== 6) {
+    _pincodeValid = false;
+    document.getElementById('fcity').value = '';
+    document.getElementById('fstate').value = '';
+    info.style.display = 'none'; return;
+  }
+  fetchPincode(pin);
+}
+
+async function fetchPincode(pin) {
+  const info = document.getElementById('pincodeInfo');
+  info.className = 'pincode-loading'; info.style.display = 'block';
+  info.textContent = 'Location dhundh rahe hain...';
+  _pincodeValid = false;
+  try {
+    const r = await fetch(API_BASE + '/api/pincode/' + pin);
+    const d = await r.json();
+    if (d[0]?.Status === 'Success') {
+      const po = d[0].PostOffice[0];
+      document.getElementById('fcity').value  = po.District;
+      document.getElementById('fstate').value = po.State;
+      document.getElementById('fpincode').classList.remove('input-error');
+      info.className = 'pincode-info';
+      info.textContent = '✅ ' + po.District + ', ' + po.State;
+      _pincodeValid = true;
+    } else {
+      document.getElementById('fcity').value = '';
+      document.getElementById('fstate').value = '';
+      document.getElementById('fpincode').classList.add('input-error');
+      info.className = 'pincode-invalid';
+      info.textContent = '❌ Invalid pincode — delivery yahan available nahi hai';
+      _pincodeValid = false;
+    }
+  } catch(e) { info.style.display = 'none'; }
+}
+
+// ── SUBMIT ORDER ──────────────────────────────────────────────────────
+async function submitOrder() {
+  const name     = document.getElementById('fname').value.trim();
+  const phone    = document.getElementById('fphone').value.trim();
+  const pincode  = document.getElementById('fpincode').value.trim();
+  const city     = document.getElementById('fcity').value.trim();
+  const state    = document.getElementById('fstate').value.trim();
+  const address  = document.getElementById('faddress').value.trim();
+  const landmark = document.getElementById('flandmark').value.trim();
+  const qty      = parseInt(document.getElementById('fqty').value);
+
+  if (!name)                           return alert('Kripya apna poora naam darj karein');
+  if (!/^\d{10}$/.test(phone))         return alert('Kripya 10-digit mobile number darj karein');
+  if (!pincode || pincode.length !== 6) return alert('Kripya 6-digit pincode darj karein');
+  if (!_pincodeValid || !city || !state) {
+    document.getElementById('fpincode').classList.add('input-error');
+    const info = document.getElementById('pincodeInfo');
+    info.style.display = 'block'; info.className = 'pincode-invalid';
+    info.textContent = '❌ Sahi pincode darj karein — order ke liye zaroori hai';
+    return alert('Invalid pincode. Kripya sahi 6-digit pincode darj karein.');
+  }
+  if (!address) return alert('Kripya apna poora address darj karein');
+
+  const fullAddress = address + (landmark ? ', ' + landmark : '');
+  const total = qty * productData.price;
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Order ho raha hai...';
+
+  try {
+    const r = await fetch(API_BASE + '/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name, phone, address: fullAddress, pincode, city, state,
+        product: productData.product, productName: productData.name,
+        productId: productData.productId, quantity: qty,
+        price: productData.price, totalAmount: total
+      })
+    });
+    const d = await r.json();
+    if (d.success) {
+      if (window.fbq) fbq('track', 'Purchase', { value: total, currency: 'INR' });
+      document.getElementById('modalBody').innerHTML = `
+        <div class="success-screen">
+          <div class="success-icon">🎉</div>
+          <h2>Order Successfully Place Ho Gaya!</h2>
+          <p>Shukriya, <strong>${name}</strong> Ji! Aapka order mil gaya!</p>
+          <div class="order-id-box">Order ID: ${d.orderId}</div>
+          <p>📱 Hamari team <strong>${phone}</strong> par call karke order confirm karegi.</p>
+          <p>🚚 Expected delivery: <strong>4–7 business days</strong></p>
+          <div class="hindi-msg">🌿 आपका ऑर्डर सफलतापूर्वक दर्ज हो गया है!<br>हमारी टीम जल्द ही आपसे संपर्क करेगी।<br>धन्यवाद — वैद्यकार्ट परिवार 🙏</div>
+        </div>`;
+    } else if (d.duplicate) {
+      btn.disabled = false;
+      btn.textContent = '✅ Order Confirm Karo — Cash on Delivery';
+      alert('⚠️ ' + d.error + '\n\nAgar problem ho toh customer care se contact karein.');
+    } else {
+      btn.disabled = false;
+      btn.textContent = '✅ Order Confirm Karo — Cash on Delivery';
+      alert('Kuch problem aa gayi. Dobara try karein.');
+    }
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = '✅ Order Confirm Karo — Cash on Delivery';
+    alert('Network error. Internet check karein aur dobara try karein.');
+  }
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────
+loadProduct();
+loadPixel();
+loadTestimonials();
+</script>
+</body>
+</html>
