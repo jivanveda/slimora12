@@ -52,9 +52,12 @@ const Testimonial = mongoose.model('Testimonial', testimonialSchema);
 const AdminToken  = mongoose.model('AdminToken',  adminTokenSchema);
 
 // ─── ADMIN AUTH MIDDLEWARE ────────────────────────────────────────────
+// Accepts token from Authorization header (API calls) OR ?token= query param
+// The query param is needed for CSV exports via window.open() — browsers
+// cannot send custom headers on direct URL opens/downloads.
 async function requireAdmin(req, res, next) {
   const auth = req.headers['authorization'] || '';
-  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  const token = (auth.startsWith('Bearer ') ? auth.slice(7) : '') || req.query.token || '';
   if (!token) return res.status(401).json({ success: false, error: 'Unauthorized' });
   try {
     const found = await AdminToken.findOne({ token });
