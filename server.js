@@ -13,34 +13,57 @@ app.use(express.json());
 // ─── NATIVE FETCH POLYFILL (fixes "Cannot find package 'node-fetch'") ─────────
 // Node 18+ has globalThis.fetch built-in. For older Node versions we fall back
 // to a tiny https/http wrapper — NO extra npm package required.
+// Safe JSON helper — never throws on empty/non-JSON body
+function safeParseJSON(text) {
+  const t = (text || '').trim();
+  if (!t) throw new Error('Empty response from Selloship API (no body returned)');
+  try { return JSON.parse(t); }
+  catch(e) { throw new Error('Selloship returned non-JSON response: ' + t.slice(0, 300)); }
+}
+
 const nativeFetch = globalThis.fetch
-  ? globalThis.fetch.bind(globalThis)
+  ? (url, opts = {}) => globalThis.fetch(url, opts).then(res => {
+      const origJson = res.json.bind(res);
+      const origText = res.text.bind(res);
+      // Wrap .json() so it gives a readable error instead of "Unexpected end of JSON"
+      res.json = async () => {
+        const text = await origText();
+        return safeParseJSON(text);
+      };
+      return res;
+    })
   : function nativeFetch(url, opts = {}) {
       return new Promise((resolve, reject) => {
         const parsedUrl = new URL(url);
         const lib = parsedUrl.protocol === 'https:' ? https : http;
+        const bodyStr = opts.body || '';
+        const headers = { ...opts.headers };
+        if (bodyStr && !headers['Content-Length']) {
+          headers['Content-Length'] = Buffer.byteLength(bodyStr);
+        }
         const options = {
           hostname: parsedUrl.hostname,
           port: parsedUrl.port || (parsedUrl.protocol === 'https:' ? 443 : 80),
           path: parsedUrl.pathname + parsedUrl.search,
           method: opts.method || 'GET',
-          headers: opts.headers || {}
+          headers
         };
         const req = lib.request(options, (res) => {
-          let data = '';
-          res.on('data', chunk => { data += chunk; });
+          const chunks = [];
+          res.on('data', chunk => chunks.push(chunk));
           res.on('end', () => {
+            const raw = Buffer.concat(chunks).toString('utf8');
             const ok = res.statusCode >= 200 && res.statusCode < 300;
             resolve({
               ok,
               status: res.statusCode,
-              json: () => Promise.resolve(JSON.parse(data)),
-              text: () => Promise.resolve(data)
+              json: () => Promise.resolve(safeParseJSON(raw)),
+              text: () => Promise.resolve(raw)
             });
           });
         });
         req.on('error', reject);
-        if (opts.body) req.write(opts.body);
+        if (bodyStr) req.write(bodyStr);
         req.end();
       });
     };
@@ -120,50 +143,57 @@ function calcAddressScore(addr, pincode, city, state) {
 const SELLO_BASE = 'https://selloship.com/api/lock_actvs/channels';
 let _selloToken = null, _selloTokenExpiry = null;
 
+// Helper: make a Selloship API call and return parsed JSON with full error context
+async function selloCall(endpoint, tokenOrNull, bodyObj) {
+  const bodyStr = bodyObj !== null ? JSON.stringify(bodyObj) : '';
+  const headers = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json'
+  };
+  if (bodyStr) headers['Content-Length'] = Buffer.byteLength(bodyStr).toString();
+  if (tokenOrNull) headers['Authorization'] = tokenOrNull;
+
+  const url = SELLO_BASE + endpoint;
+  console.log('[Selloship] POST', url, '| body:', bodyStr.slice(0, 200));
+
+  let raw = '';
+  try {
+    const res = await nativeFetch(url, { method: 'POST', headers, body: bodyStr || undefined });
+    raw = await res.text();
+    console.log('[Selloship] status:', res.status, '| response:', raw.slice(0, 500));
+    if (!raw.trim()) throw new Error('Empty response from Selloship (HTTP ' + res.status + '). Check credentials & payload.');
+    return safeParseJSON(raw);
+  } catch(e) {
+    if (e.message.includes('Empty response') || e.message.includes('non-JSON')) throw e;
+    throw new Error(e.message + (raw ? ' | raw: ' + raw.slice(0, 200) : ''));
+  }
+}
+
 async function getSelloToken(username, password) {
   if (_selloToken && _selloTokenExpiry && Date.now() < _selloTokenExpiry) return _selloToken;
-  const res = await nativeFetch(`${SELLO_BASE}/authToken`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password })
-  });
-  const data = await res.json();
+  const data = await selloCall('/authToken', null, { username, password });
   if (data.status !== 'SUCCESS') throw new Error('Selloship auth failed: ' + JSON.stringify(data));
   _selloToken = data.token;
   _selloTokenExpiry = Date.now() + 55 * 60 * 1000;
+  console.log('[Selloship] Auth OK, token cached 55 min');
   return _selloToken;
 }
 
 async function selloCreateWaybill(token, payload) {
-  const res = await nativeFetch(`${SELLO_BASE}/waybill`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': token },
-    body: JSON.stringify(payload)
-  });
-  const data = await res.json();
-  if (data.status !== 'SUCCESS') throw new Error('Waybill failed: ' + data.message + ' (' + data.reason + ')');
+  const data = await selloCall('/waybill', token, payload);
+  if (data.status !== 'SUCCESS') throw new Error('Waybill failed: ' + (data.message || JSON.stringify(data)) + ' (' + (data.reason || '') + ')');
   return data;
 }
 
 async function selloGetStatus(token, awbNumbers) {
   const query = awbNumbers.join(',');
-  const res = await nativeFetch(`${SELLO_BASE}/waybillDetails?waybills=${encodeURIComponent(query)}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': token },
-    body: '{}'
-  });
-  const data = await res.json();
+  const data = await selloCall('/waybillDetails?waybills=' + encodeURIComponent(query), token, {});
   if (data.Status !== 'SUCCESS') throw new Error('Status fetch failed: ' + JSON.stringify(data));
   return data.waybillDetails;
 }
 
 async function selloCancelWaybill(token, awb) {
-  const res = await nativeFetch(`${SELLO_BASE}/cancel`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': token },
-    body: JSON.stringify({ waybill: awb })
-  });
-  const data = await res.json();
+  const data = await selloCall('/cancel', token, { waybill: awb });
   if (data.status !== 'SUCCESS') throw new Error('Cancel failed: ' + data.message);
   return data;
 }
