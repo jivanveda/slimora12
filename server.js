@@ -3,24 +3,66 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const crypto = require('crypto');
+const https = require('https');
+const http = require('http');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ─── MONGOOSE CONNECT ───────────────────────────────────────────────
+// ─── NATIVE FETCH POLYFILL (fixes "Cannot find package 'node-fetch'") ─────────
+// Node 18+ has globalThis.fetch built-in. For older Node versions we fall back
+// to a tiny https/http wrapper — NO extra npm package required.
+const nativeFetch = globalThis.fetch
+  ? globalThis.fetch.bind(globalThis)
+  : function nativeFetch(url, opts = {}) {
+      return new Promise((resolve, reject) => {
+        const parsedUrl = new URL(url);
+        const lib = parsedUrl.protocol === 'https:' ? https : http;
+        const options = {
+          hostname: parsedUrl.hostname,
+          port: parsedUrl.port || (parsedUrl.protocol === 'https:' ? 443 : 80),
+          path: parsedUrl.pathname + parsedUrl.search,
+          method: opts.method || 'GET',
+          headers: opts.headers || {}
+        };
+        const req = lib.request(options, (res) => {
+          let data = '';
+          res.on('data', chunk => { data += chunk; });
+          res.on('end', () => {
+            const ok = res.statusCode >= 200 && res.statusCode < 300;
+            resolve({
+              ok,
+              status: res.statusCode,
+              json: () => Promise.resolve(JSON.parse(data)),
+              text: () => Promise.resolve(data)
+            });
+          });
+        });
+        req.on('error', reject);
+        if (opts.body) req.write(opts.body);
+        req.end();
+      });
+    };
+
+// ─── MONGOOSE CONNECT ─────────────────────────────────────────────────────────
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('✅ MongoDB connected'))
   .catch(err => console.error('❌ MongoDB error:', err));
 
-// ─── SCHEMAS ────────────────────────────────────────────────────────
+// ─── SCHEMAS ──────────────────────────────────────────────────────────────────
 const orderSchema = new mongoose.Schema({
   name: String, phone: String, address: String, pincode: String,
   city: String, state: String, product: String, productName: String,
   productId: String, quantity: { type: Number, default: 1 }, size: String,
   price: Number, totalAmount: Number, addressScore: { type: Number, default: 0 },
   status: { type: String, enum: ['new','confirmed','shipped','delivered','cancelled'], default: 'new' },
-  shippedAt: { type: Date }, createdAt: { type: Date, default: Date.now }
+  shippedAt: { type: Date },
+  awb: { type: String, default: null },
+  courierName: { type: String, default: null },
+  shippingLabel: { type: String, default: null },
+  shippingMode: { type: String, default: null },
+  createdAt: { type: Date, default: Date.now }
 });
 
 const productSchema = new mongoose.Schema({
@@ -30,7 +72,10 @@ const productSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
-const settingSchema = new mongoose.Schema({ metaPixel: String, backendUrl: String });
+const settingSchema = new mongoose.Schema({
+  metaPixel: String, backendUrl: String,
+  selloshipUsername: String, selloshipPassword: String
+});
 
 const testimonialSchema = new mongoose.Schema({
   name: String, location: String, text: String, rating: { type: Number, default: 5 },
@@ -38,8 +83,6 @@ const testimonialSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
-// FIX: Persistent token schema — tokens survive redeploys because they live in MongoDB
-// MongoDB TTL index auto-deletes tokens after 24 hours
 const adminTokenSchema = new mongoose.Schema({
   token: { type: String, unique: true, index: true },
   createdAt: { type: Date, default: Date.now, expires: 86400 }
@@ -51,10 +94,7 @@ const Setting     = mongoose.model('Setting',     settingSchema);
 const Testimonial = mongoose.model('Testimonial', testimonialSchema);
 const AdminToken  = mongoose.model('AdminToken',  adminTokenSchema);
 
-// ─── ADMIN AUTH MIDDLEWARE ────────────────────────────────────────────
-// Accepts token from Authorization header (API calls) OR ?token= query param
-// The query param is needed for CSV exports via window.open() — browsers
-// cannot send custom headers on direct URL opens/downloads.
+// ─── ADMIN AUTH MIDDLEWARE ─────────────────────────────────────────────────────
 async function requireAdmin(req, res, next) {
   const auth = req.headers['authorization'] || '';
   const token = (auth.startsWith('Bearer ') ? auth.slice(7) : '') || req.query.token || '';
@@ -66,7 +106,6 @@ async function requireAdmin(req, res, next) {
   } catch(e) { return res.status(500).json({ success: false, error: 'Auth error' }); }
 }
 
-// ─── HELPER: address score ────────────────────────────────────────────
 function calcAddressScore(addr, pincode, city, state) {
   let score = 0;
   if (addr && addr.trim().length > 10) score += 40;
@@ -77,7 +116,87 @@ function calcAddressScore(addr, pincode, city, state) {
   return score;
 }
 
-// ─── PUBLIC ROUTES ────────────────────────────────────────────────────
+// ─── SELLOSHIP ────────────────────────────────────────────────────────────────
+const SELLO_BASE = 'https://selloship.com/api/lock_actvs/channels';
+let _selloToken = null, _selloTokenExpiry = null;
+
+async function getSelloToken(username, password) {
+  if (_selloToken && _selloTokenExpiry && Date.now() < _selloTokenExpiry) return _selloToken;
+  const res = await nativeFetch(`${SELLO_BASE}/authToken`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password })
+  });
+  const data = await res.json();
+  if (data.status !== 'SUCCESS') throw new Error('Selloship auth failed: ' + JSON.stringify(data));
+  _selloToken = data.token;
+  _selloTokenExpiry = Date.now() + 55 * 60 * 1000;
+  return _selloToken;
+}
+
+async function selloCreateWaybill(token, payload) {
+  const res = await nativeFetch(`${SELLO_BASE}/waybill`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': token },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (data.status !== 'SUCCESS') throw new Error('Waybill failed: ' + data.message + ' (' + data.reason + ')');
+  return data;
+}
+
+async function selloGetStatus(token, awbNumbers) {
+  const query = awbNumbers.join(',');
+  const res = await nativeFetch(`${SELLO_BASE}/waybillDetails?waybills=${encodeURIComponent(query)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': token },
+    body: '{}'
+  });
+  const data = await res.json();
+  if (data.Status !== 'SUCCESS') throw new Error('Status fetch failed: ' + JSON.stringify(data));
+  return data.waybillDetails;
+}
+
+async function selloCancelWaybill(token, awb) {
+  const res = await nativeFetch(`${SELLO_BASE}/cancel`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': token },
+    body: JSON.stringify({ waybill: awb })
+  });
+  const data = await res.json();
+  if (data.status !== 'SUCCESS') throw new Error('Cancel failed: ' + data.message);
+  return data;
+}
+
+async function getSelloCredentials() {
+  const s = await Setting.findOne();
+  if (!s?.selloshipUsername || !s?.selloshipPassword)
+    throw new Error('Selloship credentials not configured. Go to Settings → Selloship to connect.');
+  return { username: s.selloshipUsername, password: s.selloshipPassword };
+}
+
+function buildWaybillPayload(order, extra = {}) {
+  return {
+    consigneeName: order.name,
+    consigneeAddress1: order.address,
+    consigneeAddress2: '',
+    consigneeCity: order.city,
+    consigneeState: order.state,
+    consigneePincode: order.pincode,
+    consigneePhone: order.phone,
+    productDesc: order.productName || 'Product',
+    productQty: order.quantity || 1,
+    productPrice: order.totalAmount || order.price || 0,
+    weight: 500,
+    length: 15, breadth: 12, height: 8,
+    paymentMode: 'COD',
+    collectableAmount: order.totalAmount || 0,
+    orderRefNumber: order._id.toString(),
+    ...extra
+  };
+}
+
+// ─── PUBLIC ROUTES ─────────────────────────────────────────────────────────────
 app.get('/', (req, res) => res.json({ status: 'ok', brand: 'Vaidyakart', ts: Date.now() }));
 
 app.post('/api/orders', async (req, res) => {
@@ -91,7 +210,7 @@ app.post('/api/orders', async (req, res) => {
     if (!state || !state.trim()) return res.json({ success: false, error: 'State is required — valid pincode needed' });
     const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
     const dup = await Order.findOne({ phone: phone.trim(), createdAt: { $gte: tenMinAgo } });
-    if (dup) return res.json({ success: false, duplicate: true, error: 'Aapka order pehle se place ho chuka hai! Thoda wait karein ya customer care se contact karein.' });
+    if (dup) return res.json({ success: false, duplicate: true, error: 'Aapka order pehle se place ho chuka hai!' });
     const addressScore = calcAddressScore(address, pincode, city, state);
     const order = new Order({ name, phone, address, pincode, city, state, product, productName, productId, quantity: quantity||1, size, price, totalAmount, addressScore });
     await order.save();
@@ -105,8 +224,11 @@ app.get('/api/products', async (req, res) => {
 });
 
 app.get('/api/pincode/:pin', async (req, res) => {
-  try { const resp = await fetch(`https://api.postalpincode.in/pincode/${req.params.pin}`); const data = await resp.json(); res.json(data); }
-  catch(e) { res.json([{ Status: 'Error' }]); }
+  try {
+    const resp = await nativeFetch(`https://api.postalpincode.in/pincode/${req.params.pin}`);
+    const data = await resp.json();
+    res.json(data);
+  } catch(e) { res.json([{ Status: 'Error' }]); }
 });
 
 app.get('/api/meta', async (req, res) => {
@@ -119,7 +241,7 @@ app.get('/api/testimonials', async (req, res) => {
   catch(e) { res.json({ success: false, error: e.message }); }
 });
 
-// ─── LIVE VISITOR TRACKING ────────────────────────────────────────────
+// ─── LIVE VISITORS ─────────────────────────────────────────────────────────────
 const visitorPings = new Map();
 app.post('/api/visitors/ping', (req, res) => {
   const { sessionId, page } = req.body;
@@ -135,7 +257,7 @@ app.get('/api/visitors/live', requireAdmin, (req, res) => {
   res.json({ success: true, count: visitorPings.size });
 });
 
-// ─── ADMIN LOGIN ──────────────────────────────────────────────────────
+// ─── ADMIN LOGIN ───────────────────────────────────────────────────────────────
 app.post('/api/admin/login', async (req, res) => {
   const { username, password } = req.body;
   if (username === process.env.ADMIN_USER && password === process.env.ADMIN_PASS) {
@@ -153,7 +275,7 @@ app.post('/api/admin/logout', requireAdmin, async (req, res) => {
   res.json({ success: true });
 });
 
-// ─── ADMIN ROUTES ─────────────────────────────────────────────────────
+// ─── ORDERS ────────────────────────────────────────────────────────────────────
 app.get('/api/orders', requireAdmin, async (req, res) => {
   try {
     const { status, search, from, to, page = 1, limit = 50 } = req.query;
@@ -172,8 +294,7 @@ app.get('/api/orders', requireAdmin, async (req, res) => {
   } catch(e) { res.json({ success: false, error: e.message }); }
 });
 
-// ─── FIX: CSV export MUST come before /api/orders/:id routes ─────────
-// Old code had this AFTER /:id routes so Express matched "export" as the :id param
+// CSV export — must be before /:id routes
 app.get('/api/orders/export/csv', requireAdmin, async (req, res) => {
   try {
     const { from, to, status, ids } = req.query;
@@ -188,11 +309,11 @@ app.get('/api/orders/export/csv', requireAdmin, async (req, res) => {
       }
     }
     const orders = await Order.find(query).sort({ createdAt: -1 });
-    const headers = ['Order ID','Name','Phone','Address','Pincode','City','State','Product','Qty','Amount','Address Score','Status','Shipped At','Date'];
+    const headers = ['Order ID','Name','Phone','Address','Pincode','City','State','Product','Qty','Amount','Addr Score','Status','AWB','Courier','Shipping Mode','Shipped At','Date'];
     const rows = orders.map(o => [
-      o._id, o.name, o.phone, `"${(o.address||'').replace(/"/g,'""')}"`,
-      o.pincode, o.city, o.state, o.productName, o.quantity,
-      o.totalAmount, o.addressScore||0, o.status,
+      o._id, o.name, o.phone, '"'+(o.address||'').replace(/"/g,'""')+'"',
+      o.pincode, o.city, o.state, o.productName, o.quantity, o.totalAmount,
+      o.addressScore||0, o.status, o.awb||'', o.courierName||'', o.shippingMode||'',
       o.shippedAt ? new Date(o.shippedAt).toLocaleString('en-IN') : '',
       new Date(o.createdAt).toLocaleString('en-IN')
     ]);
@@ -204,16 +325,127 @@ app.get('/api/orders/export/csv', requireAdmin, async (req, res) => {
   } catch(e) { res.json({ success: false, error: e.message }); }
 });
 
+// Bulk status change
 app.put('/api/orders/bulk/status', requireAdmin, async (req, res) => {
   try {
     const { ids, status } = req.body;
-    if (!ids || !ids.length) return res.json({ success: false, error: 'No IDs provided' });
+    if (!ids?.length) return res.json({ success: false, error: 'No IDs provided' });
     const validStatuses = ['new','confirmed','shipped','delivered','cancelled'];
     if (!validStatuses.includes(status)) return res.json({ success: false, error: 'Invalid status' });
     const updateData = { status };
     if (status === 'shipped') updateData.shippedAt = new Date();
     const result = await Order.updateMany({ _id: { $in: ids } }, { $set: updateData });
     res.json({ success: true, updated: result.modifiedCount });
+  } catch(e) { res.json({ success: false, error: e.message }); }
+});
+
+// Bulk ship via Selloship
+app.post('/api/orders/bulk/ship-selloship', requireAdmin, async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!ids?.length) return res.json({ success: false, error: 'No IDs provided' });
+    const { username, password } = await getSelloCredentials();
+    const selloToken = await getSelloToken(username, password);
+    const orders = await Order.find({ _id: { $in: ids } });
+    const results = [];
+    for (const order of orders) {
+      try {
+        const wbData = await selloCreateWaybill(selloToken, buildWaybillPayload(order));
+        await Order.findByIdAndUpdate(order._id, {
+          status: 'shipped', shippedAt: new Date(),
+          awb: wbData.waybill, courierName: wbData.courierName || '',
+          shippingLabel: wbData.shippingLabel || '', shippingMode: 'selloship'
+        });
+        results.push({ orderId: order._id, success: true, awb: wbData.waybill, courier: wbData.courierName });
+      } catch(err) {
+        results.push({ orderId: order._id, success: false, error: err.message });
+      }
+    }
+    res.json({ success: true, results, successCount: results.filter(r=>r.success).length, failCount: results.filter(r=>!r.success).length });
+  } catch(e) { res.json({ success: false, error: e.message }); }
+});
+
+// Bulk ship manually
+app.post('/api/orders/bulk/ship-manual', requireAdmin, async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!ids?.length) return res.json({ success: false, error: 'No IDs provided' });
+    const result = await Order.updateMany({ _id: { $in: ids } }, { $set: { status: 'shipped', shippedAt: new Date(), shippingMode: 'manual' } });
+    res.json({ success: true, updated: result.modifiedCount });
+  } catch(e) { res.json({ success: false, error: e.message }); }
+});
+
+// Single ship via Selloship
+app.post('/api/orders/:id/ship-selloship', requireAdmin, async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.json({ success: false, error: 'Order not found' });
+    const { username, password } = await getSelloCredentials();
+    const selloToken = await getSelloToken(username, password);
+    const wbData = await selloCreateWaybill(selloToken, buildWaybillPayload(order, req.body));
+    const updated = await Order.findByIdAndUpdate(req.params.id, {
+      status: 'shipped', shippedAt: new Date(),
+      awb: wbData.waybill, courierName: wbData.courierName || '',
+      shippingLabel: wbData.shippingLabel || '', shippingMode: 'selloship'
+    }, { new: true });
+    res.json({ success: true, awb: wbData.waybill, courierName: wbData.courierName, shippingLabel: wbData.shippingLabel, order: updated });
+  } catch(e) { res.json({ success: false, error: e.message }); }
+});
+
+// Single manual ship
+app.post('/api/orders/:id/ship-manual', requireAdmin, async (req, res) => {
+  try {
+    const { awb, courierName } = req.body;
+    const updated = await Order.findByIdAndUpdate(req.params.id, {
+      status: 'shipped', shippedAt: new Date(),
+      awb: awb || null, courierName: courierName || null, shippingMode: 'manual'
+    }, { new: true });
+    if (!updated) return res.json({ success: false, error: 'Order not found' });
+    res.json({ success: true, order: updated });
+  } catch(e) { res.json({ success: false, error: e.message }); }
+});
+
+// AWB tracking status
+app.get('/api/orders/:id/awb-status', requireAdmin, async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order?.awb) return res.json({ success: false, error: 'No AWB for this order' });
+    const { username, password } = await getSelloCredentials();
+    const selloToken = await getSelloToken(username, password);
+    const details = await selloGetStatus(selloToken, [order.awb]);
+    res.json({ success: true, details });
+  } catch(e) { res.json({ success: false, error: e.message }); }
+});
+
+// Cancel AWB
+app.post('/api/orders/:id/cancel-awb', requireAdmin, async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order?.awb) return res.json({ success: false, error: 'No AWB found' });
+    const { username, password } = await getSelloCredentials();
+    const selloToken = await getSelloToken(username, password);
+    const result = await selloCancelWaybill(selloToken, order.awb);
+    res.json({ success: true, result });
+  } catch(e) { res.json({ success: false, error: e.message }); }
+});
+
+// Edit order fields
+app.put('/api/orders/:id', requireAdmin, async (req, res) => {
+  try {
+    const allowed = ['name','phone','address','pincode','city','state','productName','quantity','size','price','totalAmount'];
+    const updateData = {};
+    for (const key of allowed) { if (req.body[key] !== undefined) updateData[key] = req.body[key]; }
+    if (updateData.address || updateData.pincode || updateData.city || updateData.state) {
+      const order = await Order.findById(req.params.id);
+      const addr = updateData.address || order.address;
+      const pin = updateData.pincode || order.pincode;
+      const city = updateData.city || order.city;
+      const state = updateData.state || order.state;
+      updateData.addressScore = calcAddressScore(addr, pin, city, state);
+    }
+    const updated = await Order.findByIdAndUpdate(req.params.id, { $set: updateData }, { new: true });
+    if (!updated) return res.json({ success: false, error: 'Order not found' });
+    res.json({ success: true, order: updated });
   } catch(e) { res.json({ success: false, error: e.message }); }
 });
 
@@ -232,6 +464,7 @@ app.delete('/api/orders/:id', requireAdmin, async (req, res) => {
   catch(e) { res.json({ success: false, error: e.message }); }
 });
 
+// ─── PRODUCTS ──────────────────────────────────────────────────────────────────
 app.get('/api/products/all', requireAdmin, async (req, res) => {
   try { const products = await Product.find(); res.json({ success: true, products }); }
   catch(e) { res.json({ success: false, error: e.message }); }
@@ -249,6 +482,7 @@ app.delete('/api/products/:id', requireAdmin, async (req, res) => {
   catch(e) { res.json({ success: false, error: e.message }); }
 });
 
+// ─── STATS ─────────────────────────────────────────────────────────────────────
 app.get('/api/stats', requireAdmin, async (req, res) => {
   try {
     const { from, to } = req.query;
@@ -266,7 +500,7 @@ app.get('/api/stats', requireAdmin, async (req, res) => {
       Order.countDocuments({ ...dateQuery, status: 'delivered' }),
       Order.countDocuments({ ...dateQuery, status: 'cancelled' }),
       Order.aggregate([{ $match: { ...dateQuery, status: { $ne: 'cancelled' } } }, { $group: { _id: null, total: { $sum: '$totalAmount' } } }]),
-      Order.find(dateQuery && Object.keys(dateQuery).length ? dateQuery : {}).sort({ createdAt: -1 }).limit(10)
+      Order.find(Object.keys(dateQuery).length ? dateQuery : {}).sort({ createdAt: -1 }).limit(10)
     ]);
     const revenue = revenueData[0]?.total || 0;
     const chartData = await Order.aggregate([
@@ -285,9 +519,18 @@ app.get('/api/stats', requireAdmin, async (req, res) => {
   } catch(e) { res.json({ success: false, error: e.message }); }
 });
 
+// ─── SETTINGS ──────────────────────────────────────────────────────────────────
 app.get('/api/settings', requireAdmin, async (req, res) => {
-  try { const s = await Setting.findOne(); res.json({ success: true, metaPixel: s?.metaPixel || '', backendUrl: s?.backendUrl || '' }); }
-  catch(e) { res.json({ success: false, error: e.message }); }
+  try {
+    const s = await Setting.findOne();
+    res.json({
+      success: true,
+      metaPixel: s?.metaPixel || '',
+      backendUrl: s?.backendUrl || '',
+      selloshipUsername: s?.selloshipUsername || '',
+      selloshipConnected: !!(s?.selloshipUsername && s?.selloshipPassword)
+    });
+  } catch(e) { res.json({ success: false, error: e.message }); }
 });
 app.post('/api/meta', requireAdmin, async (req, res) => {
   try {
@@ -299,14 +542,33 @@ app.post('/api/meta', requireAdmin, async (req, res) => {
 });
 app.post('/api/settings', requireAdmin, async (req, res) => {
   try {
-    const { metaPixel, backendUrl } = req.body;
+    const { metaPixel, backendUrl, selloshipUsername, selloshipPassword } = req.body;
     let s = await Setting.findOne();
-    if (s) { if(metaPixel!==undefined) s.metaPixel=metaPixel; if(backendUrl!==undefined) s.backendUrl=backendUrl; await s.save(); }
-    else { s = await Setting.create({ metaPixel, backendUrl }); }
+    if (s) {
+      if (metaPixel !== undefined) s.metaPixel = metaPixel;
+      if (backendUrl !== undefined) s.backendUrl = backendUrl;
+      if (selloshipUsername !== undefined) s.selloshipUsername = selloshipUsername;
+      if (selloshipPassword !== undefined) s.selloshipPassword = selloshipPassword;
+      await s.save();
+    } else {
+      s = await Setting.create({ metaPixel, backendUrl, selloshipUsername, selloshipPassword });
+    }
+    if (selloshipUsername || selloshipPassword) { _selloToken = null; _selloTokenExpiry = null; }
     res.json({ success: true });
   } catch(e) { res.json({ success: false, error: e.message }); }
 });
 
+app.post('/api/settings/test-selloship', requireAdmin, async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    _selloToken = null; _selloTokenExpiry = null;
+    const token = await getSelloToken(username, password);
+    if (token) res.json({ success: true, message: 'Selloship connected successfully!' });
+    else res.json({ success: false, error: 'Could not get token' });
+  } catch(e) { res.json({ success: false, error: e.message }); }
+});
+
+// ─── TESTIMONIALS ──────────────────────────────────────────────────────────────
 app.get('/api/testimonials/all', requireAdmin, async (req, res) => {
   try { const testimonials = await Testimonial.find().sort({ createdAt: -1 }); res.json({ success: true, testimonials }); }
   catch(e) { res.json({ success: false, error: e.message }); }
@@ -322,6 +584,19 @@ app.put('/api/testimonials/:id', requireAdmin, async (req, res) => {
 app.delete('/api/testimonials/:id', requireAdmin, async (req, res) => {
   try { await Testimonial.findByIdAndDelete(req.params.id); res.json({ success: true }); }
   catch(e) { res.json({ success: false, error: e.message }); }
+});
+
+// Selloship webhook — register this URL with Selloship dashboard
+app.post('/api/shipping/webhook', async (req, res) => {
+  try {
+    const { waybillDetails, Status } = req.body;
+    if (Status !== 'SUCCESS' || !waybillDetails?.waybill) return res.status(400).json({ error: 'Invalid payload' });
+    const { waybill, currentStatus } = waybillDetails;
+    const statusMap = { 'Delivered': 'delivered', 'Cancelled': 'cancelled', 'RTO': 'cancelled' };
+    const ourStatus = statusMap[currentStatus];
+    if (ourStatus) await Order.findOneAndUpdate({ awb: waybill }, { status: ourStatus });
+    res.json({ received: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/seed', async (req, res) => {
@@ -343,21 +618,10 @@ app.post('/api/seed', async (req, res) => {
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`🚀 Vaidyakart server running on port ${PORT}`);
-
-  // ─── KEEP-ALIVE SELF-PING (every 5 min) ──────────────────────────
-  // Render free tier sleeps after 15 min of inactivity.
-  // This pings every 5 min to stay awake.
-  // ALSO: set up a free external cron at https://cron-job.org pointing
-  // to https://jughasd.onrender.com every 5 minutes — this is your
-  // safety net if the server was already asleep when the interval fires.
+  console.log('🚀 Vaidyakart server running on port ' + PORT);
   const SELF_URL = process.env.RENDER_EXTERNAL_URL || process.env.BACKEND_URL || 'https://jughasd.onrender.com';
   setInterval(async () => {
-    try {
-      await fetch(`${SELF_URL}/`);
-      console.log(`✅ Keep-alive ping [${new Date().toISOString()}]`);
-    } catch (e) {
-      console.warn('⚠️ Keep-alive ping failed:', e.message);
-    }
+    try { await nativeFetch(SELF_URL + '/'); console.log('✅ Keep-alive ping [' + new Date().toISOString() + ']'); }
+    catch(e) { console.warn('⚠️ Keep-alive ping failed:', e.message); }
   }, 5 * 60 * 1000);
 });
