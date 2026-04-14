@@ -5,6 +5,7 @@ const cors = require('cors');
 const crypto = require('crypto');
 const https = require('https');
 const http = require('http');
+let axios; try { axios = require('axios'); } catch(e) { axios = null; }
 
 const app = express();
 app.use(cors());
@@ -143,35 +144,42 @@ function calcAddressScore(addr, pincode, city, state) {
 const SELLO_BASE = 'https://selloship.com/api/lock_actvs/channels';
 let _selloToken = null, _selloTokenExpiry = null;
 
-// Helper: make a Selloship API call and return parsed JSON with full error context
-async function selloCall(endpoint, tokenOrNull, bodyObj) {
-  const bodyStr = bodyObj !== null ? JSON.stringify(bodyObj) : '';
-  const headers = {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json'
-  };
-  if (bodyStr) headers['Content-Length'] = Buffer.byteLength(bodyStr).toString();
-  if (tokenOrNull) headers['Authorization'] = tokenOrNull;
-
-  const url = SELLO_BASE + endpoint;
-  console.log('[Selloship] POST', url, '| body:', bodyStr.slice(0, 200));
-
-  let raw = '';
+// Selloship HTTP helper — uses axios if available, falls back to nativeFetch
+// axios is more reliable for APIs that need exact Content-Length handling
+async function selloPost(url, body, token) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = token;
+  console.log('[Selloship] POST', url);
+  console.log('[Selloship] payload:', JSON.stringify(body).slice(0, 400));
   try {
-    const res = await nativeFetch(url, { method: 'POST', headers, body: bodyStr || undefined });
-    raw = await res.text();
-    console.log('[Selloship] status:', res.status, '| response:', raw.slice(0, 500));
-    if (!raw.trim()) throw new Error('Empty response from Selloship (HTTP ' + res.status + '). Check credentials & payload.');
-    return safeParseJSON(raw);
+    let data;
+    if (axios) {
+      const res = await axios.post(url, body, { headers, timeout: 30000 });
+      data = res.data;
+    } else {
+      const bodyStr = JSON.stringify(body);
+      headers['Content-Length'] = Buffer.byteLength(bodyStr).toString();
+      const res = await nativeFetch(url, { method: 'POST', headers, body: bodyStr });
+      const raw = await res.text();
+      if (!raw.trim()) throw new Error('Empty response from Selloship (HTTP ' + res.status + ')');
+      data = safeParseJSON(raw);
+    }
+    console.log('[Selloship] response:', JSON.stringify(data).slice(0, 400));
+    return data;
   } catch(e) {
-    if (e.message.includes('Empty response') || e.message.includes('non-JSON')) throw e;
-    throw new Error(e.message + (raw ? ' | raw: ' + raw.slice(0, 200) : ''));
+    // axios wraps the response in e.response
+    if (e.response) {
+      const body = e.response.data;
+      const msg = (typeof body === 'object' ? JSON.stringify(body) : String(body)).slice(0, 300);
+      throw new Error('Selloship HTTP ' + e.response.status + ': ' + msg);
+    }
+    throw e;
   }
 }
 
 async function getSelloToken(username, password) {
   if (_selloToken && _selloTokenExpiry && Date.now() < _selloTokenExpiry) return _selloToken;
-  const data = await selloCall('/authToken', null, { username, password });
+  const data = await selloPost(SELLO_BASE + '/authToken', { username, password }, null);
   if (data.status !== 'SUCCESS') throw new Error('Selloship auth failed: ' + JSON.stringify(data));
   _selloToken = data.token;
   _selloTokenExpiry = Date.now() + 55 * 60 * 1000;
@@ -180,20 +188,20 @@ async function getSelloToken(username, password) {
 }
 
 async function selloCreateWaybill(token, payload) {
-  const data = await selloCall('/waybill', token, payload);
-  if (data.status !== 'SUCCESS') throw new Error('Waybill failed: ' + (data.message || JSON.stringify(data)) + ' (' + (data.reason || '') + ')');
+  const data = await selloPost(SELLO_BASE + '/waybill', payload, token);
+  if (data.status !== 'SUCCESS') throw new Error('Waybill failed: ' + (data.message || JSON.stringify(data)) + (data.reason ? ' | reason: ' + data.reason : ''));
   return data;
 }
 
 async function selloGetStatus(token, awbNumbers) {
   const query = awbNumbers.join(',');
-  const data = await selloCall('/waybillDetails?waybills=' + encodeURIComponent(query), token, {});
+  const data = await selloPost(SELLO_BASE + '/waybillDetails?waybills=' + encodeURIComponent(query), {}, token);
   if (data.Status !== 'SUCCESS') throw new Error('Status fetch failed: ' + JSON.stringify(data));
   return data.waybillDetails;
 }
 
 async function selloCancelWaybill(token, awb) {
-  const data = await selloCall('/cancel', token, { waybill: awb });
+  const data = await selloPost(SELLO_BASE + '/cancel', { waybill: awb }, token);
   if (data.status !== 'SUCCESS') throw new Error('Cancel failed: ' + data.message);
   return data;
 }
@@ -206,25 +214,95 @@ async function getSelloCredentials() {
 }
 
 function buildWaybillPayload(order, extra = {}) {
+  // Field names exactly as Selloship API expects them
+  // Both camelCase and snake_case variants included for compatibility
+  const totalAmt = Number(order.totalAmount || order.price || 0);
   return {
+    // Consignee (receiver) details
+    name: order.name,
+    mobile: order.phone,
+    address: order.address,
+    city: order.city,
+    state: order.state,
+    pincode: order.pincode,
+    // Also send alternate field name variants
     consigneeName: order.name,
+    consigneeMobile: order.phone,
+    consigneePhone: order.phone,
+    consigneeAddress: order.address,
     consigneeAddress1: order.address,
-    consigneeAddress2: '',
     consigneeCity: order.city,
     consigneeState: order.state,
-    consigneePincode: order.pincode,
-    consigneePhone: order.phone,
+    consigneePincode: String(order.pincode),
+    // Shipment details
+    productName: order.productName || 'Product',
     productDesc: order.productName || 'Product',
-    productQty: order.quantity || 1,
-    productPrice: order.totalAmount || order.price || 0,
-    weight: 500,
-    length: 15, breadth: 12, height: 8,
+    product: order.productName || 'Product',
+    quantity: order.quantity || 1,
+    qty: order.quantity || 1,
+    weight: 500,        // grams
+    length: 15,
+    breadth: 12,
+    height: 8,
+    // Payment
     paymentMode: 'COD',
-    collectableAmount: order.totalAmount || 0,
+    payment_mode: 'COD',
+    codAmount: totalAmt,
+    collectableAmount: totalAmt,
+    cod_amount: totalAmt,
+    declaredValue: totalAmt,
+    // Order reference
+    orderNumber: order._id.toString(),
     orderRefNumber: order._id.toString(),
+    order_id: order._id.toString(),
     ...extra
   };
 }
+
+// ─── SELLOSHIP DEBUG ENDPOINT ────────────────────────────────────────────────
+// Lets you test what Selloship actually accepts without creating a real order
+app.post('/api/debug/selloship-probe', requireAdmin, async (req, res) => {
+  try {
+    const { username, password } = await getSelloCredentials();
+    // Step 1: test auth
+    _selloToken = null; _selloTokenExpiry = null;
+    const token = await getSelloToken(username, password);
+    // Step 2: send minimal waybill and return raw response  
+    const testPayload = {
+      name: 'Test Customer', mobile: '9999999999', phone: '9999999999',
+      address: 'Test Address Line 1', city: 'Mumbai', state: 'Maharashtra',
+      pincode: '400001', consigneeName: 'Test Customer', consigneeMobile: '9999999999',
+      consigneeAddress1: 'Test Address', consigneeCity: 'Mumbai',
+      consigneeState: 'Maharashtra', consigneePincode: '400001',
+      productName: 'Test Product', productDesc: 'Test Product',
+      quantity: 1, qty: 1, weight: 500, length: 15, breadth: 12, height: 8,
+      paymentMode: 'COD', payment_mode: 'COD', codAmount: 599,
+      collectableAmount: 599, declaredValue: 599,
+      orderNumber: 'TEST-' + Date.now(), orderRefNumber: 'TEST-' + Date.now()
+    };
+    const headers = { 'Content-Type': 'application/json', 'Authorization': token };
+    let rawResponse = '';
+    let statusCode = 0;
+    try {
+      if (axios) {
+        const r = await axios.post(SELLO_BASE + '/waybill', testPayload, { headers, timeout: 30000 });
+        rawResponse = JSON.stringify(r.data);
+        statusCode = r.status;
+      } else {
+        const bodyStr = JSON.stringify(testPayload);
+        const r = await nativeFetch(SELLO_BASE + '/waybill', { method:'POST', headers:{ ...headers,'Content-Length': Buffer.byteLength(bodyStr).toString() }, body: bodyStr });
+        rawResponse = await r.text();
+        statusCode = r.status;
+      }
+    } catch(e) {
+      rawResponse = e.response ? JSON.stringify(e.response.data) : e.message;
+      statusCode = e.response?.status || 0;
+    }
+    res.json({ success: true, authOk: true, waybillHttpStatus: statusCode, waybillRawResponse: rawResponse, payloadSent: testPayload });
+  } catch(e) {
+    res.json({ success: false, error: e.message });
+  }
+});
 
 // ─── PUBLIC ROUTES ─────────────────────────────────────────────────────────────
 app.get('/', (req, res) => res.json({ status: 'ok', brand: 'Vaidyakart', ts: Date.now() }));
