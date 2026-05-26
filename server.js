@@ -1,5 +1,4 @@
 require('dotenv').config();
-const PINCODE_DB = require('./pincode_data.json');
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -332,14 +331,12 @@ app.get('/api/products', async (req, res) => {
   catch(e) { res.json({ success: false, error: e.message }); }
 });
 
-app.get('/api/pincode/:pin', (req, res) => {
-  const pin = (req.params.pin || '').trim();
-  const entry = PINCODE_DB[pin];
-  if (entry) {
-    res.json([{ Status: 'Success', PostOffice: [{ Name: entry.city, District: entry.city, State: entry.state, Pincode: pin }] }]);
-  } else {
-    res.json([{ Status: 'Error', Message: 'No records found' }]);
-  }
+app.get('/api/pincode/:pin', async (req, res) => {
+  try {
+    const resp = await nativeFetch(`https://api.postalpincode.in/pincode/${req.params.pin}`);
+    const data = await resp.json();
+    res.json(data);
+  } catch(e) { res.json([{ Status: 'Error' }]); }
 });
 
 app.get('/api/meta', async (req, res) => {
