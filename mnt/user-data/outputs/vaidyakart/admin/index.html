@@ -177,6 +177,7 @@ tr:hover td{background:#fafafa}
     <nav class="sidebar-nav">
       <div class="nav-item active" onclick="showTab('dashboard',this)"><span class="nav-icon">📊</span> Dashboard</div>
       <div class="nav-item" onclick="showTab('orders',this)"><span class="nav-icon">📦</span> Orders</div>
+      <div class="nav-item" onclick="showTab('shipped',this)"><span class="nav-icon">🚚</span> Shipped ⭐</div>
       <div class="nav-item" onclick="showTab('products',this)"><span class="nav-icon">🧪</span> Products</div>
       <div class="nav-item" onclick="showTab('settings',this)"><span class="nav-icon">⚙️</span> Settings</div>
     </nav>
@@ -284,6 +285,39 @@ tr:hover td{background:#fafafa}
           </table>
         </div>
         <div class="pagination" id="pagination"></div>
+      </div>
+    </div>
+
+    <!-- SHIPPED ORDERS TAB ⭐ NEW -->
+    <div class="tab-content" id="tab-shipped">
+      <div class="filter-bar">
+        <input type="text" id="shippedSearch" placeholder="Search name/phone/AWB..." oninput="loadShippedOrders()" style="min-width:200px"/>
+        <input type="date" id="shippedFrom" onchange="loadShippedOrders()"/>
+        <span style="color:var(--muted)">to</span>
+        <input type="date" id="shippedTo" onchange="loadShippedOrders()"/>
+        <select id="shippedRowsPerPage" onchange="shippedPage=1;loadShippedOrders()">
+          <option value="50">50/page</option>
+          <option value="100">100/page</option>
+          <option value="200">200/page</option>
+          <option value="500">500/page</option>
+        </select>
+        <button class="btn btn-green" onclick="exportShippedCSV()">⬇️ CSV</button>
+      </div>
+      <div class="table-wrap">
+        <div class="table-header">
+          <h3>🚚 Shipped & Delivered Orders</h3>
+        </div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr>
+              <th>#</th><th>Name</th><th>Phone</th><th>City</th><th>Pincode</th>
+              <th>Product</th><th>Qty</th><th>Amount</th>
+              <th>Status</th><th>AWB</th><th>Shipped Date</th><th>View</th>
+            </tr></thead>
+            <tbody id="shippedBody"></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="shippedPagination"></div>
       </div>
     </div>
 
@@ -395,7 +429,7 @@ tr:hover td{background:#fafafa}
       </div>
       <div class="form-group"><label>Address</label><textarea id="eoAddress" rows="2" placeholder="Full delivery address"></textarea></div>
       <div class="form-row">
-        <div class="form-group"><label>Pincode</label><input id="eoPincode" placeholder="6-digit pincode"/></div>
+        <div class="form-group"><label>Pincode</label><input id="eoPincode" placeholder="6-digit pincode" oninput="fetchPincodeAdmin()"/><small id="pincodeHintAdmin" style="display:none;margin-top:4px;font-size:12px"></small></div>
         <div class="form-group"><label>City</label><input id="eoCity" placeholder="City"/></div>
       </div>
       <div class="form-row">
@@ -563,10 +597,13 @@ function showTab(tab, el) {
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('tab-'+tab).classList.add('active');
   if(el)el.classList.add('active');
-  const titles={dashboard:'📊 Dashboard',orders:'📦 Orders',products:'🧪 Products',settings:'⚙️ Settings'};
+  const titles={dashboard:'📊 Dashboard',orders:'📦 Orders',shipped:'🚚 Shipped Orders',products:'🧪 Products',settings:'⚙️ Settings'};
   document.getElementById('pageTitle').textContent=titles[tab];
-  if(tab==='dashboard')loadDashboard(); if(tab==='orders')loadOrders();
-  if(tab==='products')loadProducts(); if(tab==='settings')loadSettings();
+  if(tab==='dashboard')loadDashboard(); 
+  if(tab==='orders')loadOrders();
+  if(tab==='shipped')loadShippedOrders();
+  if(tab==='products')loadProducts(); 
+  if(tab==='settings')loadSettings();
   if(window.innerWidth<768)document.getElementById('sidebar').classList.remove('open');
 }
 function toggleSidebar(){document.getElementById('sidebar').classList.toggle('open');}
@@ -625,6 +662,77 @@ async function loadOrders() {
     if(!d.success){toast('Could not load orders','error');return;}
     renderOrders(d.orders); renderPagination(d.total,d.pages,d.page,limit);
   } catch(e){toast('Failed to load orders','error');}
+}
+
+// ─── SHIPPED ORDERS ⭐ NEW ───────────────────────────────────────────
+let shippedPage = 1;
+async function loadShippedOrders() {
+  const search=document.getElementById('shippedSearch').value;
+  const from=document.getElementById('shippedFrom').value;
+  const to=document.getElementById('shippedTo').value;
+  const limit=document.getElementById('shippedRowsPerPage').value;
+  let url=`${API}/api/orders/shipped?page=${shippedPage}&limit=${limit}`;
+  if(search)url+='&search='+encodeURIComponent(search);
+  if(from)url+='&from='+from; if(to)url+='&to='+to;
+  try {
+    const r=await fetch(url,{headers:authHeaders()}); const d=await r.json();
+    if(!d.success){toast('Could not load shipped orders','error');return;}
+    renderShippedOrders(d.orders); renderShippedPagination(d.total,d.page,limit);
+  } catch(e){toast('Failed to load shipped orders','error');}
+}
+
+function renderShippedOrders(orders) {
+  const tb=document.getElementById('shippedBody');
+  if(!orders.length){tb.innerHTML='<tr><td colspan="12" style="text-align:center;padding:30px;color:var(--muted)">No shipped orders found</td></tr>';return;}
+  tb.innerHTML=orders.map((o)=>{
+    const statusBadge=o.status==='delivered'?'<span class="badge badge-delivered">Delivered</span>':'<span class="badge badge-shipped">Shipped</span>';
+    const awbHtml=o.awb?`<code style="background:#f0f0f0;padding:4px 8px;border-radius:4px;font-size:11px">${escHtml(o.awb)}</code>`:'<span style="color:var(--muted);font-size:11px">—</span>';
+    return`<tr>
+      <td style="font-size:11px;color:var(--muted);font-family:monospace">${o._id.slice(-8)}</td>
+      <td class="td-name">${escHtml(o.name)}</td>
+      <td class="td-phone">${o.phone}</td>
+      <td>${escHtml(o.city||'—')}</td>
+      <td style="font-weight:700;font-family:monospace">${o.pincode}</td>
+      <td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(o.productName||'')}">${escHtml(o.productName||'—')}</td>
+      <td style="text-align:center">${o.quantity}</td>
+      <td style="font-weight:700;white-space:nowrap">₹${o.totalAmount}</td>
+      <td>${statusBadge}</td>
+      <td>${awbHtml}</td>
+      <td style="font-size:11px;color:var(--muted);white-space:nowrap">${fmtDate(o.shippedAt||o.createdAt)}</td>
+      <td>
+        <button class="btn btn-blue btn-sm" onclick="alert('Order ID: ${o._id}\nName: ${escHtml(o.name)}\nPhone: ${o.phone}\nAddress: ${escHtml(o.address)}\nCity: ${o.city}, ${o.state}\nPincode: ${o.pincode}\nStatus: ${o.status}\nAWB: ${o.awb||'N/A'}')">👁️</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function renderShippedPagination(total,page,limit) {
+  const wrap=document.getElementById('shippedPagination');
+  const pages=Math.ceil(total/limit);
+  if(pages<=1){wrap.innerHTML=`<div class="page-info">Showing ${total} orders</div>`;return;}
+  let btns='';
+  if(page>1)btns+=`<button class="page-btn" onclick="goShippedPage(${page-1})">← Prev</button>`;
+  const start=Math.max(1,page-2),end=Math.min(pages,page+2);
+  for(let p=start;p<=end;p++)btns+=`<button class="page-btn ${p===page?'active':''}" onclick="goShippedPage(${p})">${p}</button>`;
+  if(page<pages)btns+=`<button class="page-btn" onclick="goShippedPage(${page+1})">Next →</button>`;
+  wrap.innerHTML=btns+`<div class="page-info">Page ${page} of ${pages} | ${total} total</div>`;
+}
+
+function goShippedPage(p){shippedPage=p;loadShippedOrders();}
+function exportShippedCSV(){
+  const rows=[['Order ID','Name','Phone','City','Pincode','Product','Qty','Amount','Status','AWB','Shipped Date']];
+  document.querySelectorAll('#shippedBody tr').forEach(tr=>{
+    const cells=tr.querySelectorAll('td');
+    if(cells.length){
+      rows.push([
+        cells[0].textContent,cells[1].textContent,cells[2].textContent,cells[3].textContent,
+        cells[4].textContent,cells[5].textContent,cells[6].textContent,cells[7].textContent,
+        cells[8].textContent,cells[9].textContent,cells[10].textContent
+      ]);
+    }
+  });
+  const csv=rows.map(r=>r.map(c=>`"${c.replace(/"/g,'""')}"`).join(',')).join('\n');
+  downloadCSV(csv,'shipped-orders');
 }
 
 function renderOrders(orders) {
@@ -958,6 +1066,33 @@ async function savePixel() {
 function fmtDate(dt){if(!dt)return'—';return new Date(dt).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});}
 function escHtml(str){if(!str)return'';return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function toast(msg,type='success'){const wrap=document.getElementById('toastWrap');const el=document.createElement('div');el.className='toast '+type;el.innerHTML=`<span>${msg}</span>`;wrap.appendChild(el);setTimeout(()=>el.remove(),4000);}
+
+// ─── PINCODE AUTO-FETCH (Admin Panel) ─────────────────────────────
+async function fetchPincodeAdmin() {
+  const pin = document.getElementById('eoPincode').value.replace(/\D/g,'');
+  document.getElementById('eoPincode').value = pin;
+  const hint = document.getElementById('pincodeHintAdmin');
+  if (pin.length !== 6) { hint.style.display='none'; return; }
+  
+  hint.style.display='block'; hint.textContent='📍 Fetching...'; hint.style.color='#6b7280';
+  try {
+    const r = await fetch(`${API}/api/pincode/${pin}`, {headers: authHeaders()});
+    const d = await r.json();
+    if (d[0]?.Status === 'Success') {
+      const po = d[0].PostOffice[0];
+      document.getElementById('eoCity').value = po.District;
+      document.getElementById('eoState').value = po.State;
+      hint.textContent = '✅ ' + po.District + ', ' + po.State;
+      hint.style.color = '#16a34a';
+    } else {
+      hint.textContent = '❌ Pincode not found';
+      hint.style.color = '#ef4444';
+    }
+  } catch(e) {
+    hint.textContent = '❌ Error fetching pincode';
+    hint.style.color = '#ef4444';
+  }
+}
 
 document.getElementById('productModal').addEventListener('click',e=>{if(e.target===document.getElementById('productModal'))closeProductModal();});
 document.getElementById('editOrderModal').addEventListener('click',e=>{if(e.target===document.getElementById('editOrderModal'))closeEditOrderModal();});

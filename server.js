@@ -8,15 +8,8 @@ const http = require('http');
 let axios; try { axios = require('axios'); } catch(e) { axios = null; }
 
 const app = express();
-
-// ─── MIDDLEWARE ────────────────────────────────────────────────────────
 app.use(cors());
-app.use(express.json({ limit: '10mb' }));
-app.use((req, res, next) => {
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
-  next();
-});
+app.use(express.json());
 
 // ─── NATIVE FETCH POLYFILL (fixes "Cannot find package 'node-fetch'") ─────────
 // Node 18+ has globalThis.fetch built-in. For older Node versions we fall back
@@ -338,44 +331,12 @@ app.get('/api/products', async (req, res) => {
   catch(e) { res.json({ success: false, error: e.message }); }
 });
 
-// ─── LOAD PINCODE DATABASE ────────────────────────────────────────────
-const fs = require('fs');
-const path = require('path');
-let pincodeDB = {};
-try {
-  const dbPath = path.join(__dirname, 'pincode_db.json');
-  pincodeDB = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
-  console.log(`✅ Loaded ${Object.keys(pincodeDB).length} pincodes`);
-} catch(e) {
-  console.warn('⚠️ Pincode DB not found, will serve API fallback only');
-}
-
 app.get('/api/pincode/:pin', async (req, res) => {
-  const pin = req.params.pin;
-  const data = pincodeDB[pin];
-  
-  // Check local DB first
-  if (data && data.state) {
-    return res.json([{
-      Status: 'Success',
-      PostOffice: [{
-        Name: data.postOffice,
-        District: data.district,
-        State: data.state
-      }]
-    }]);
-  }
-  
-  // Fallback to external API
   try {
-    console.log(`📡 Pincode ${pin} not in DB, fetching from external API...`);
-    const resp = await nativeFetch(`https://api.postalpincode.in/pincode/${pin}`);
-    const result = await resp.json();
-    res.json(result);
-  } catch(e) {
-    console.error(`❌ API fetch failed for ${pin}:`, e.message);
-    res.json([{ Status: 'Error', Message: 'Pincode not found' }]);
-  }
+    const resp = await nativeFetch(`https://api.postalpincode.in/pincode/${req.params.pin}`);
+    const data = await resp.json();
+    res.json(data);
+  } catch(e) { res.json([{ Status: 'Error' }]); }
 });
 
 app.get('/api/meta', async (req, res) => {
@@ -425,31 +386,23 @@ app.post('/api/admin/logout', requireAdmin, async (req, res) => {
 // ─── ORDERS ────────────────────────────────────────────────────────────────────
 app.get('/api/orders', requireAdmin, async (req, res) => {
   try {
-    const { status = 'all', search, from, to, page = 1, limit = 50 } = req.query;
+    const { status, search, from, to, page = 1, limit = 50 } = req.query;
     let query = {};
-    if (status !== 'all' && status) query.status = status;
-    if (search) query.$or = [
-      { name: new RegExp(search,'i') },
-      { phone: new RegExp(search,'i') },
-      { city: new RegExp(search,'i') },
-      { pincode: new RegExp(search,'i') }
-    ];
+    if (status && status !== 'all') query.status = status;
+    if (search) query.$or = [{ name: new RegExp(search,'i') },{ phone: new RegExp(search,'i') },{ city: new RegExp(search,'i') }];
     if (from || to) {
       query.createdAt = {};
       if (from) query.createdAt.$gte = new Date(from);
       if (to) { const d = new Date(to); d.setHours(23,59,59,999); query.createdAt.$lte = d; }
     }
-    const skip = Math.max(0, (parseInt(page)-1) * parseInt(limit));
-    const orders = await Order.find(query).sort({ createdAt: -1 }).skip(skip).limit(parseInt(limit));
+    const skip = (parseInt(page)-1) * parseInt(limit);
     const total = await Order.countDocuments(query);
-    res.json({ success: true, orders, total, page: parseInt(page), limit: parseInt(limit) });
-  } catch(e) { 
-    console.error('❌ Orders fetch error:', e.message);
-    res.json({ success: false, error: e.message }); 
-  }
+    const orders = await Order.find(query).sort({ createdAt: -1 }).skip(skip).limit(parseInt(limit));
+    res.json({ success: true, orders, total, page: parseInt(page), pages: Math.ceil(total/parseInt(limit)) });
+  } catch(e) { res.json({ success: false, error: e.message }); }
 });
 
-// ─── SHIPPED ORDERS ONLY ───────────────────────────────────────────────────────
+// ─── SHIPPED ORDERS ONLY ⭐ NEW ───────────────────────────────────────────
 app.get('/api/orders/shipped', requireAdmin, async (req, res) => {
   try {
     const { search, from, to, page = 1, limit = 50 } = req.query;
@@ -466,21 +419,11 @@ app.get('/api/orders/shipped', requireAdmin, async (req, res) => {
       if (to) { const d = new Date(to); d.setHours(23,59,59,999); query.shippedAt.$lte = d; }
     }
     const skip = Math.max(0, (parseInt(page)-1) * parseInt(limit));
+    const total = await Order.countDocuments(query);
     const orders = await Order.find(query).sort({ shippedAt: -1 }).skip(skip).limit(parseInt(limit));
-    const total = await Order.countDocuments(query);
-    res.json({ success: true, orders, total, page: parseInt(page), limit: parseInt(limit) });
-  } catch(e) { 
-    console.error('❌ Shipped orders error:', e.message);
-    res.json({ success: false, error: e.message }); 
-  }
-});
-    const total = await Order.countDocuments(query);
-    const orders = await Order.find(query).sort({ createdAt: -1 }).skip(skip).limit(parseInt(limit));
     res.json({ success: true, orders, total, page: parseInt(page), pages: Math.ceil(total/parseInt(limit)) });
   } catch(e) { res.json({ success: false, error: e.message }); }
 });
-
-// CSV export — must be before /:id routes
 app.get('/api/orders/export/csv', requireAdmin, async (req, res) => {
   try {
     const { from, to, status, ids } = req.query;
