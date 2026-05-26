@@ -797,7 +797,12 @@ async function applyBulkStatus() {
   try {
     const r=await fetch(API+'/api/orders/bulk/status',{method:'PUT',headers:authHeaders(),body:JSON.stringify({ids:[...selectedIds],status})});
     const d=await r.json();
-    if(d.success){toast(`✅ ${d.updated} orders updated to "${status}"`, 'success');clearSelection();loadOrders();}
+    if(d.success){
+      toast(`✅ ${d.updated} orders updated to "${status}"`, 'success');
+      clearSelection();
+      loadOrders();
+      if(status==='shipped' || status==='delivered') loadShippedOrders();
+    }
     else toast('Bulk update failed: '+(d.error||''),'error');
   } catch(e){toast('Network error','error');}
 }
@@ -808,7 +813,12 @@ async function bulkShipManual() {
   try {
     const r=await fetch(API+'/api/orders/bulk/ship-manual',{method:'POST',headers:authHeaders(),body:JSON.stringify({ids:[...selectedIds]})});
     const d=await r.json();
-    if(d.success){toast(`✅ ${d.updated} orders marked as shipped`,'success');clearSelection();loadOrders();}
+    if(d.success){
+      toast(`✅ ${d.updated} orders marked as shipped`,'success');
+      clearSelection();
+      loadOrders();
+      loadShippedOrders(); // refresh shipped tab
+    }
     else toast('Bulk ship failed: '+(d.error||''),'error');
   } catch(e){toast('Network error','error');}
 }
@@ -823,7 +833,9 @@ async function bulkShipSelloship() {
     if(d.success){
       toast(`✅ ${d.successCount} shipped, ${d.failCount} failed`,'success');
       if(d.failCount>0){const fails=d.results.filter(r=>!r.success);console.error('Failed shipments:',fails);toast('⚠️ Some failed — check console for details','error');}
-      clearSelection();loadOrders();
+      clearSelection();
+      loadOrders();
+      loadShippedOrders(); // refresh shipped tab
     } else toast('Bulk Selloship failed: '+(d.error||''),'error');
   } catch(e){toast('Network error: '+e.message,'error');}
 }
@@ -832,7 +844,9 @@ async function updateStatus(id,status) {
   try {
     await fetch(API+'/api/orders/'+id+'/status',{method:'PUT',headers:authHeaders(),body:JSON.stringify({status})});
     toast('Status updated → '+status,'success');
-    if(status==='shipped')loadOrders(); // refresh to show shipped tab
+    // Refresh both tabs so shipped orders move instantly
+    loadOrders();
+    if(status==='shipped' || status==='delivered') loadShippedOrders();
   } catch(e){toast('Update failed','error');}
 }
 
@@ -915,7 +929,9 @@ async function doShipSelloship() {
     const d = await r.json();
     if(d.success){
       toast(`✅ Shipped via Selloship! AWB: ${d.awb} (${d.courierName||'—'})`,'success');
-      closeShipModal(); loadOrders();
+      closeShipModal(); 
+      loadOrders();
+      loadShippedOrders(); // refresh shipped tab
       if(d.shippingLabel) window.open(d.shippingLabel,'_blank');
     } else {
       toast('Selloship error: '+(d.error||'Unknown error'),'error');
@@ -931,7 +947,12 @@ async function doShipManual() {
   try {
     const r = await fetch(API+'/api/orders/'+id+'/ship-manual',{method:'POST',headers:authHeaders(),body:JSON.stringify({awb,courierName})});
     const d = await r.json();
-    if(d.success){toast('✅ Order marked as shipped','success');closeShipModal();loadOrders();}
+    if(d.success){
+      toast('✅ Order marked as shipped','success');
+      closeShipModal();
+      loadOrders();
+      loadShippedOrders(); // refresh shipped tab
+    }
     else toast('Failed: '+(d.error||''),'error');
   } catch(e){toast('Network error','error');}
 }
