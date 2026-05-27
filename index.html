@@ -1161,7 +1161,7 @@ footer {
       <div class="form-row2">
         <div class="form-group">
           <label class="form-label">City</label>
-          <input class="form-input" id="fcity" placeholder="Auto-fill" readonly/>
+          <input class="form-input" id="fcity" placeholder="City (auto-fill ya khud likhein)"/>
         </div>
         <div class="form-group">
           <label class="form-label">State</label>
@@ -1435,6 +1435,80 @@ async function fetchPincode(pin) {
   _pinValid = false;
 }
 
+
+function _pinSet(city, state) {
+  document.getElementById('fcity').value  = city;
+  document.getElementById('fstate').value = state;
+  document.getElementById('fpincode').classList.remove('err');
+  const hint = document.getElementById('pincodeHint');
+  hint.className = 'pincode-hint ok';
+  hint.textContent = '✅ ' + (city ? city + ', ' : '') + state;
+  _pinValid = true;
+}
+
+// ── SUBMIT ORDER ───────────────────────────────────────────────────────
+async function submitOrder() {
+  const name     = document.getElementById('fname').value.trim();
+  const phone    = document.getElementById('fphone').value.trim();
+  const pincode  = document.getElementById('fpincode').value.trim();
+  const city     = document.getElementById('fcity').value.trim();
+  const state    = document.getElementById('fstate').value.trim();
+  const address  = document.getElementById('faddress').value.trim();
+  const landmark = document.getElementById('flandmark').value.trim();
+  const qty      = parseInt(document.getElementById('fqty').value);
+
+  if (!name)                            return alert('Kripya apna poora naam darj karein');
+  if (!/^\d{10}$/.test(phone))          return alert('Kripya 10-digit mobile number darj karein');
+  if (!pincode || pincode.length !== 6) return alert('Kripya 6-digit pincode darj karein');
+  if (!city || !state)                  { document.getElementById('fpincode').classList.add('err'); return alert('City aur state required hain. Pincode check karein ya city manually likhein.'); }
+  if (!address)                         return alert('Kripya apna poora address darj karein');
+
+  const fullAddress = address + (landmark ? ', ' + landmark : '');
+  const total = qty === 1 ? 699 : qty * productData.price;
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true; btn.textContent = '⏳ Order ho raha hai...';
+
+  try {
+    const r = await fetch(API_BASE + '/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name, phone, address: fullAddress, pincode, city, state,
+        product: productData.product, productName: productData.name,
+        productId: productData.productId, quantity: qty,
+        price: productData.price, totalAmount: total
+      })
+    });
+    const d = await r.json();
+    if (d.success) {
+      if (window.fbq) fbq('track', 'Purchase', { value: total, currency: 'INR' });
+      document.getElementById('modalBody').innerHTML = `
+        <div class="success-screen">
+          <span class="success-anim">🎉</span>
+          <h2>Order Place Ho Gaya!</h2>
+          <p>Shukriya, <strong>${name}</strong> Ji! Aapka order mil gaya.</p>
+          <div class="order-id-badge">Order ID: ${d.orderId}</div>
+          <p>📱 Hamari team <strong>${phone}</strong> par call karke confirm karegi.</p>
+          <p>🚚 Expected delivery: <strong>4–7 business days</strong></p>
+          <div class="hindi-success">🌿 आपका ऑर्डर सफलतापूर्वक दर्ज हो गया है!<br>हमारी टीम जल्द ही आपसे संपर्क करेगी।<br>धन्यवाद — वैद्यकार्ट परिवार 🙏</div>
+        </div>`;
+    } else if (d.duplicate) {
+      btn.disabled = false; btn.textContent = '✅ Order Confirm Karo — Cash on Delivery';
+      alert('⚠️ ' + d.error + '\n\nAgar problem ho toh customer care se contact karein.');
+    } else {
+      btn.disabled = false; btn.textContent = '✅ Order Confirm Karo — Cash on Delivery';
+      alert('Kuch problem aa gayi. Dobara try karein.');
+    }
+  } catch(e) {
+    btn.disabled = false; btn.textContent = '✅ Order Confirm Karo — Cash on Delivery';
+    alert('Network error. Internet check karein aur dobara try karein.');
+  }
+}
+
+// ── INIT ────────────────────────────────────────────────────────
+loadProduct();
+loadPixel();
+loadTestimonials();
 </script>
 </body>
 </html>
