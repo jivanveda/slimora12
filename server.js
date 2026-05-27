@@ -331,7 +331,15 @@ app.get('/api/products', async (req, res) => {
   catch(e) { res.json({ success: false, error: e.message }); }
 });
 
-// ─── PINCODE — load local DB at startup ──────────────────────────────
+// Serve compact pincode DB to frontend
+app.get('/pc.json', (req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=86400'); // cache 1 day
+  res.sendFile(path.join(__dirname, 'pc.json'), (err) => {
+    if (err) res.status(404).json({ error: 'pc.json not found' });
+  });
+});
+
+
 const fs   = require('fs');
 const path = require('path');
 let _pcDB  = {};
