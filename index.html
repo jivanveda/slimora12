@@ -1369,35 +1369,10 @@ function updateSummary() {
   document.getElementById('sumTotal').textContent = '₹' + total.toLocaleString('en-IN');
 }
 
-// ── PINCODE — 2-LAYER (L3 dead api removed) ──────────────────────────
-// L1: pc.json (fetched once, cached in memory)
-// L2: server /api/pincode  (local DB + postpincode.in fallback + prefix guess)
-// NOTE: api.postalpincode.in SSL cert expired — removed from code
+// ── PINCODE — API only (always fresh city + state) ————————————————————————
 let _pinValid = false;
-let _pcDB = null;
-let _pcLoading = false;
-
-async function _loadPcDB() {
-  if (_pcDB || _pcLoading) return;
-  _pcLoading = true;
-  try {
-    const r = await fetch(API_BASE + '/pc.json');
-    const raw = await r.json();
-    _pcDB = raw;
-  } catch(e) { _pcDB = null; }
-  _pcLoading = false;
-}
-
-function _lookupLocal(pin) {
-  if (!_pcDB) return null;
-  const v = _pcDB.p[pin];
-  if (!v) return null;
-  const parts = v.split(',').map(Number);
-  const [si, di, ci] = parts;
-  const city = (ci >= 0 && _pcDB.c) ? (_pcDB.c[ci] || '') : '';
-  const district = _pcDB.d[di] || '';
-  return { state: _pcDB.s[si], district, city: city || district };
-}
+let _pinCache = {}; // session cache: pin -> {city, state}
+let _pinDebounce = null;
 
 function onPincodeInput() {
   const pin = document.getElementById('fpincode').value.replace(/\D/g,'');
@@ -1407,9 +1382,11 @@ function onPincodeInput() {
     _pinValid = false; hint.style.display = 'none';
     document.getElementById('fcity').value = '';
     document.getElementById('fstate').value = '';
+    clearTimeout(_pinDebounce);
     return;
   }
-  fetchPincode(pin);
+  clearTimeout(_pinDebounce);
+  _pinDebounce = setTimeout(() => fetchPincode(pin), 300);
 }
 
 async function fetchPincode(pin) {
@@ -1418,26 +1395,28 @@ async function fetchPincode(pin) {
   hint.textContent = '📍 Dhundh rahe hain...';
   _pinValid = false;
 
-  // L1: local pc.json cache (instant)
-  const local = _lookupLocal(pin);
-  if (local) { _pinSet(local.city || local.district, local.state); return; }
+  // Session cache hit
+  if (_pinCache[pin]) { _pinSet(_pinCache[pin].city, _pinCache[pin].state); return; }
 
-  // L2: server (handles DB + postpincode.in + prefix-guess fallback)
+  // API: server /api/pincode (pincode_db.json + postpincode.in fallback)
   try {
-    const r = await fetch(API_BASE + '/api/pincode/' + pin, {signal: AbortSignal.timeout(6000)});
+    const r = await fetch(API_BASE + '/api/pincode/' + pin, { signal: AbortSignal.timeout(8000) });
     if (r.ok) {
       const d = await r.json();
       if (d[0]?.Status === 'Success') {
         const po = d[0].PostOffice[0];
-        // Use Name (city) first, fall back to District
         const city = po.Name || po.District || '';
         const state = po.State || '';
-        if (state) { _pinSet(city, state); return; }
+        if (state) {
+          _pinCache[pin] = { city, state };
+          _pinSet(city, state);
+          return;
+        }
       }
     }
   } catch(e) {}
 
-  // All failed
+  // Failed
   document.getElementById('fcity').value = '';
   document.getElementById('fstate').value = '';
   document.getElementById('fpincode').classList.add('err');
@@ -1446,80 +1425,6 @@ async function fetchPincode(pin) {
   _pinValid = false;
 }
 
-function _pinSet(city, state) {
-  document.getElementById('fcity').value  = city;
-  document.getElementById('fstate').value = state;
-  document.getElementById('fpincode').classList.remove('err');
-  const hint = document.getElementById('pincodeHint');
-  hint.className = 'pincode-hint ok';
-  hint.textContent = '✅ ' + (city ? city + ', ' : '') + state;
-  _pinValid = true;
-}
-
-// ── SUBMIT ORDER ──────────────────────────────────────────────────────
-async function submitOrder() {
-  const name     = document.getElementById('fname').value.trim();
-  const phone    = document.getElementById('fphone').value.trim();
-  const pincode  = document.getElementById('fpincode').value.trim();
-  const city     = document.getElementById('fcity').value.trim();
-  const state    = document.getElementById('fstate').value.trim();
-  const address  = document.getElementById('faddress').value.trim();
-  const landmark = document.getElementById('flandmark').value.trim();
-  const qty      = parseInt(document.getElementById('fqty').value);
-
-  if (!name)                            return alert('Kripya apna poora naam darj karein');
-  if (!/^\d{10}$/.test(phone))          return alert('Kripya 10-digit mobile number darj karein');
-  if (!pincode || pincode.length !== 6) return alert('Kripya 6-digit pincode darj karein');
-  if (!_pinValid || !city || !state)    { document.getElementById('fpincode').classList.add('err'); return alert('Invalid pincode. Kripya sahi pincode darj karein.'); }
-  if (!address)                         return alert('Kripya apna poora address darj karein');
-
-  const fullAddress = address + (landmark ? ', ' + landmark : '');
-  const total = qty === 1 ? 699 : qty * productData.price;
-  const btn = document.getElementById('submitBtn');
-  btn.disabled = true; btn.textContent = '⏳ Order ho raha hai...';
-
-  try {
-    const r = await fetch(API_BASE + '/api/orders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name, phone, address: fullAddress, pincode, city, state,
-        product: productData.product, productName: productData.name,
-        productId: productData.productId, quantity: qty,
-        price: productData.price, totalAmount: total
-      })
-    });
-    const d = await r.json();
-    if (d.success) {
-      if (window.fbq) fbq('track', 'Purchase', { value: total, currency: 'INR' });
-      document.getElementById('modalBody').innerHTML = `
-        <div class="success-screen">
-          <span class="success-anim">🎉</span>
-          <h2>Order Place Ho Gaya!</h2>
-          <p>Shukriya, <strong>${name}</strong> Ji! Aapka order mil gaya.</p>
-          <div class="order-id-badge">Order ID: ${d.orderId}</div>
-          <p>📱 Hamari team <strong>${phone}</strong> par call karke confirm karegi.</p>
-          <p>🚚 Expected delivery: <strong>4–7 business days</strong></p>
-          <div class="hindi-success">🌿 आपका ऑर्डर सफलतापूर्वक दर्ज हो गया है!<br>हमारी टीम जल्द ही आपसे संपर्क करेगी।<br>धन्यवाद — वैद्यकार्ट परिवार 🙏</div>
-        </div>`;
-    } else if (d.duplicate) {
-      btn.disabled = false; btn.textContent = '✅ Order Confirm Karo — Cash on Delivery';
-      alert('⚠️ ' + d.error + '\n\nAgar problem ho toh customer care se contact karein.');
-    } else {
-      btn.disabled = false; btn.textContent = '✅ Order Confirm Karo — Cash on Delivery';
-      alert('Kuch problem aa gayi. Dobara try karein.');
-    }
-  } catch(e) {
-    btn.disabled = false; btn.textContent = '✅ Order Confirm Karo — Cash on Delivery';
-    alert('Network error. Internet check karein aur dobara try karein.');
-  }
-}
-
-// ── INIT ──────────────────────────────────────────────────────────────
-loadProduct();
-loadPixel();
-loadTestimonials();
-_loadPcDB(); // pre-fetch pincode DB silently
 </script>
 </body>
 </html>
