@@ -342,17 +342,78 @@ app.get('/pc.json', (req, res) => {
 
 const fs   = require('fs');
 const path = require('path');
-let _pcDB  = {};
+
+// ─── PINCODE DB: merge pincode_db.json + pincode_data.json ───────────────────
+let _pcDB = {};
 try {
   _pcDB = JSON.parse(fs.readFileSync(path.join(__dirname,'pincode_db.json'),'utf8'));
-  console.log(`✅ Pincode DB loaded: ${Object.keys(_pcDB).length} entries`);
-} catch(e) { console.warn('⚠️  pincode_db.json not found, will use external API only'); }
+  console.log(`✅ pincode_db.json loaded: ${Object.keys(_pcDB).length} entries`);
+} catch(e) { console.warn('⚠️  pincode_db.json not found'); }
+try {
+  const _pcData = JSON.parse(fs.readFileSync(path.join(__dirname,'pincode_data.json'),'utf8'));
+  let added = 0;
+  for (const [pin, entry] of Object.entries(_pcData)) {
+    if (!_pcDB[pin] && entry.state) { _pcDB[pin] = { city: entry.city, state: entry.state }; added++; }
+  }
+  console.log(`✅ pincode_data.json merged: +${added} entries (total: ${Object.keys(_pcDB).length})`);
+} catch(e) { console.warn('⚠️  pincode_data.json not found'); }
+
+// Runtime cache: pincodes fetched from external API this session
+const _pincodeCache = new Map();
+
+// India pincode first-2-digits → state (covers all postal circles)
+const _PIN_STATE = {
+  '11':'Delhi','12':'Haryana','13':'Haryana','14':'Punjab','15':'Punjab','16':'Punjab',
+  '17':'Himachal Pradesh','18':'Jammu & Kashmir','19':'Jammu & Kashmir',
+  '20':'Uttar Pradesh','21':'Uttar Pradesh','22':'Uttar Pradesh','23':'Uttar Pradesh',
+  '24':'Uttar Pradesh','25':'Uttar Pradesh','26':'Uttar Pradesh','27':'Uttar Pradesh',
+  '28':'Uttar Pradesh','29':'Uttar Pradesh',
+  '30':'Rajasthan','31':'Rajasthan','32':'Rajasthan','33':'Rajasthan','34':'Rajasthan','35':'Rajasthan',
+  '36':'Gujarat','37':'Gujarat','38':'Gujarat','39':'Gujarat',
+  '40':'Maharashtra','41':'Maharashtra','42':'Maharashtra','43':'Maharashtra','44':'Maharashtra',
+  '45':'Madhya Pradesh','46':'Madhya Pradesh','47':'Madhya Pradesh','48':'Madhya Pradesh',
+  '49':'Chhattisgarh',
+  '50':'Andhra Pradesh','51':'Andhra Pradesh','52':'Andhra Pradesh','53':'Andhra Pradesh',
+  '54':'Andhra Pradesh','55':'Andhra Pradesh',
+  '56':'Karnataka','57':'Karnataka','58':'Karnataka','59':'Karnataka',
+  '60':'Tamil Nadu','61':'Tamil Nadu','62':'Tamil Nadu','63':'Tamil Nadu','64':'Tamil Nadu','65':'Tamil Nadu',
+  '66':'Kerala','67':'Kerala','68':'Kerala','69':'Kerala',
+  '70':'West Bengal','71':'West Bengal','72':'West Bengal','73':'West Bengal','74':'West Bengal',
+  '75':'Odisha','76':'Odisha','77':'Odisha',
+  '78':'Assam','79':'Northeast India',
+  '80':'Bihar','81':'Bihar','84':'Bihar','85':'Bihar',
+  '82':'Jharkhand','83':'Jharkhand',
+  '86':'Odisha',
+  '87':'West Bengal',
+  '90':'Armed Forces','91':'Armed Forces','92':'Armed Forces','93':'Armed Forces','94':'Armed Forces',
+};
+
+function _fetchPincodeAPI(pin) {
+  return new Promise((resolve, reject) => {
+    const req = require('https').request({
+      hostname: 'api.postalpincode.in',
+      path: `/pincode/${pin}`,
+      method: 'GET',
+      timeout: 5000,
+    }, (res) => {
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => {
+        try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8'))); }
+        catch(e) { reject(new Error('Invalid JSON')); }
+      });
+    });
+    req.setTimeout(5000, () => { req.destroy(); reject(new Error('Timeout')); });
+    req.on('error', reject);
+    req.end();
+  });
+}
 
 app.get('/api/pincode/:pin', async (req, res) => {
   const pin = String(req.params.pin).replace(/\D/g,'');
   if (pin.length !== 6) return res.json([{ Status: 'Error', Message: 'Invalid pin' }]);
 
-  // Layer 1: local DB (instant)
+  // Layer 1: local DB (~0ms)
   const local = _pcDB[pin];
   if (local?.state) {
     return res.json([{ Status: 'Success', PostOffice: [{
@@ -362,14 +423,36 @@ app.get('/api/pincode/:pin', async (req, res) => {
     }]}]);
   }
 
-  // Layer 2: external API fallback
-  try {
-    const resp = await nativeFetch(`https://api.postalpincode.in/pincode/${pin}`);
-    const data = await resp.json();
-    return res.json(data);
-  } catch(e) {
-    return res.json([{ Status: 'Error', Message: 'Pincode not found' }]);
+  // Layer 2: in-memory session cache (sub-ms for repeat queries)
+  const cached = _pincodeCache.get(pin);
+  if (cached) {
+    return res.json([{ Status: 'Success', PostOffice: [{
+      Name: cached.postOffice || cached.city || '',
+      District: cached.district || cached.city || '',
+      State: cached.state
+    }]}]);
   }
+
+  // Layer 3: external API with 5s timeout
+  try {
+    const data = await _fetchPincodeAPI(pin);
+    if (Array.isArray(data) && data[0]?.Status === 'Success' && data[0]?.PostOffice?.length > 0) {
+      const po = data[0].PostOffice[0];
+      _pincodeCache.set(pin, { city: po.District || '', state: po.State || '', district: po.District || '', postOffice: po.Name || '' });
+      return res.json(data);
+    }
+  } catch(e) {
+    console.warn(`[Pincode] API fail for ${pin}: ${e.message}`);
+  }
+
+  // Layer 4: state-prefix guess — at minimum returns state so form can proceed
+  const guessedState = _PIN_STATE[pin.slice(0,2)];
+  if (guessedState) {
+    return res.json([{ Status: 'Success', PostOffice: [{ Name: '', District: '', State: guessedState }], _partial: true }]);
+  }
+
+  // Layer 5: absolute fallback
+  return res.json([{ Status: 'Error', Message: 'Pincode not found' }]);
 });
 
 app.get('/api/meta', async (req, res) => {
