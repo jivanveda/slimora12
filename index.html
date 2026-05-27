@@ -1402,12 +1402,12 @@ async function fetchPincode(pin) {
   hint.className = 'pincode-hint loading'; hint.style.display = 'block';
   hint.textContent = '📍 Fetching...';
   try {
-    const r = await fetch('https://api.postalpincode.in/pincode/' + pin, { signal: AbortSignal.timeout(7000) });
+    const r = await fetch('/api/pincode/' + pin, { signal: AbortSignal.timeout(7000) });
     const d = await r.json();
-    if (Array.isArray(d) && d[0]?.Status === 'Success' && d[0]?.PostOffice?.length) {
-      const po = d[0].PostOffice[0];
-      const city = po.District || po.Name || '';
-      const state = po.State || '';
+    // Server returns { Name, District, State } on success
+    const city = d.District || d.Name || '';
+    const state = d.State || '';
+    if (city || state) {
       if (city) document.getElementById('fcity').value = city;
       if (state) setStateDropdown(state);
       hint.className = 'pincode-hint ok';
@@ -1415,8 +1415,8 @@ async function fetchPincode(pin) {
       return;
     }
   } catch(e) {}
-  hint.className = 'pincode-hint bad';
-  hint.textContent = '❌ Pincode nahi mila — state/city khud chunein';
+  // API failed or no data — hide hint silently, let user fill manually
+  hint.style.display = 'none';
 }
 
 function setStateDropdown(state) {
