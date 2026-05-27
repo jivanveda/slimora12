@@ -1165,7 +1165,23 @@ footer {
         </div>
         <div class="form-group">
           <label class="form-label">State</label>
-          <input class="form-input" id="fstate" placeholder="Auto-fill" readonly/>
+          <select class="form-input" id="fstate">
+          <option value="">-- State chunein --</option>
+          <option>Andaman & Nicobar Islands</option><option>Andhra Pradesh</option>
+          <option>Arunachal Pradesh</option><option>Assam</option><option>Bihar</option>
+          <option>Chandigarh</option><option>Chhattisgarh</option>
+          <option>Dadra & Nagar Haveli and Daman & Diu</option><option>Delhi</option>
+          <option>Goa</option><option>Gujarat</option><option>Haryana</option>
+          <option>Himachal Pradesh</option><option>Jammu & Kashmir</option>
+          <option>Jharkhand</option><option>Karnataka</option><option>Kerala</option>
+          <option>Ladakh</option><option>Lakshadweep</option>
+          <option>Madhya Pradesh</option><option>Maharashtra</option><option>Manipur</option>
+          <option>Meghalaya</option><option>Mizoram</option><option>Nagaland</option>
+          <option>Odisha</option><option>Puducherry</option><option>Punjab</option>
+          <option>Rajasthan</option><option>Sikkim</option><option>Tamil Nadu</option>
+          <option>Telangana</option><option>Tripura</option><option>Uttar Pradesh</option>
+          <option>Uttarakhand</option><option>West Bengal</option>
+        </select>
         </div>
       </div>
       <div class="form-group">
@@ -1369,82 +1385,52 @@ function updateSummary() {
   document.getElementById('sumTotal').textContent = '₹' + total.toLocaleString('en-IN');
 }
 
-// ── PINCODE — API only (always fresh city + state) ————————————————————————
-let _pinValid = false;
-let _pinCache = {}; // session cache: pin -> {city, state}
+// ── PINCODE + CITY + STATE ──────────────────────────────────────────
 let _pinDebounce = null;
 
 function onPincodeInput() {
   const pin = document.getElementById('fpincode').value.replace(/\D/g,'');
   document.getElementById('fpincode').value = pin;
   const hint = document.getElementById('pincodeHint');
-  if (pin.length !== 6) {
-    _pinValid = false; hint.style.display = 'none';
-    document.getElementById('fcity').value = '';
-    document.getElementById('fstate').value = '';
-    clearTimeout(_pinDebounce);
-    return;
-  }
+  hint.style.display = 'none';
   clearTimeout(_pinDebounce);
-  _pinDebounce = setTimeout(() => fetchPincode(pin), 300);
+  if (pin.length === 6) _pinDebounce = setTimeout(() => fetchPincode(pin), 400);
 }
 
 async function fetchPincode(pin) {
   const hint = document.getElementById('pincodeHint');
   hint.className = 'pincode-hint loading'; hint.style.display = 'block';
-  hint.textContent = '📍 Dhundh rahe hain...';
-  _pinValid = false;
-
-  // Session cache hit
-  if (_pinCache[pin]) { _pinSet(_pinCache[pin].city, _pinCache[pin].state); return; }
-
-  // L1: India Post official API — direct from browser (no server hop)
+  hint.textContent = '📍 Fetching...';
   try {
-    const r = await fetch('https://api.postalpincode.in/pincode/' + pin, { signal: AbortSignal.timeout(6000) });
-    if (r.ok) {
-      const d = await r.json();
-      if (Array.isArray(d) && d[0]?.Status === 'Success' && d[0]?.PostOffice?.length) {
-        const po = d[0].PostOffice[0];
-        const city = po.District || po.Name || '';
-        const state = po.State || '';
-        if (state) { _pinCache[pin] = { city, state }; _pinSet(city, state); return; }
-      }
+    const r = await fetch('https://api.postalpincode.in/pincode/' + pin, { signal: AbortSignal.timeout(7000) });
+    const d = await r.json();
+    if (Array.isArray(d) && d[0]?.Status === 'Success' && d[0]?.PostOffice?.length) {
+      const po = d[0].PostOffice[0];
+      const city = po.District || po.Name || '';
+      const state = po.State || '';
+      if (city) document.getElementById('fcity').value = city;
+      if (state) setStateDropdown(state);
+      hint.className = 'pincode-hint ok';
+      hint.textContent = '✅ ' + (city ? city + ', ' : '') + state;
+      return;
     }
   } catch(e) {}
-
-  // L2: server fallback (local pincode_db.json)
-  try {
-    const r = await fetch(API_BASE + '/api/pincode/' + pin, { signal: AbortSignal.timeout(6000) });
-    if (r.ok) {
-      const d = await r.json();
-      if (d[0]?.Status === 'Success') {
-        const po = d[0].PostOffice[0];
-        const city = po.Name || po.District || '';
-        const state = po.State || '';
-        if (state && city) { _pinCache[pin] = { city, state }; _pinSet(city, state); return; }
-      }
-    }
-  } catch(e) {}
-
-  // Failed
-  document.getElementById('fcity').value = '';
-  document.getElementById('fstate').value = '';
-  document.getElementById('fpincode').classList.add('err');
   hint.className = 'pincode-hint bad';
-  hint.textContent = '❌ Pincode nahi mila — sahi darj karein';
-  _pinValid = false;
+  hint.textContent = '❌ Pincode nahi mila — state/city khud chunein';
 }
 
-
-function _pinSet(city, state) {
-  document.getElementById('fcity').value  = city;
-  document.getElementById('fstate').value = state;
-  document.getElementById('fpincode').classList.remove('err');
-  const hint = document.getElementById('pincodeHint');
-  hint.className = 'pincode-hint ok';
-  hint.textContent = '✅ ' + (city ? city + ', ' : '') + state;
-  _pinValid = true;
+function setStateDropdown(state) {
+  const sel = document.getElementById('fstate');
+  // exact match first
+  for (let o of sel.options) {
+    if (o.value.toLowerCase() === state.toLowerCase()) { sel.value = o.value; return; }
+  }
+  // partial match
+  for (let o of sel.options) {
+    if (o.value.toLowerCase().includes(state.toLowerCase()) || state.toLowerCase().includes(o.value.toLowerCase())) { sel.value = o.value; return; }
+  }
 }
+
 
 // ── SUBMIT ORDER ───────────────────────────────────────────────────────
 async function submitOrder() {
