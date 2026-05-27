@@ -1375,17 +1375,19 @@ function updateSummary() {
 // NOTE: api.postalpincode.in SSL cert expired — removed from code
 let _pinValid = false;
 let _pcDB = null;
-let _pcLoading = false;
 
+let _pcDBPromise = null;
 async function _loadPcDB() {
-  if (_pcDB || _pcLoading) return;
-  _pcLoading = true;
-  try {
-    const r = await fetch(API_BASE + '/pc.json');
-    const raw = await r.json();
-    _pcDB = raw;
-  } catch(e) { _pcDB = null; }
-  _pcLoading = false;
+  if (_pcDB) return;
+  if (_pcDBPromise) return _pcDBPromise;
+  _pcDBPromise = (async () => {
+    try {
+      const r = await fetch(API_BASE + '/pc.json');
+      const raw = await r.json();
+      _pcDB = raw;
+    } catch(e) { _pcDB = null; }
+  })();
+  return _pcDBPromise;
 }
 
 function _lookupLocal(pin) {
@@ -1415,7 +1417,8 @@ async function fetchPincode(pin) {
   hint.textContent = '📍 Dhundh rahe hain...';
   _pinValid = false;
 
-  // L1: local pc.json cache (instant)
+  // L1: local pc.json cache (await load if still in-flight)
+  await _loadPcDB();
   const local = _lookupLocal(pin);
   if (local) { _pinSet(local.district, local.state); return; }
 
@@ -1426,8 +1429,8 @@ async function fetchPincode(pin) {
       const d = await r.json();
       if (d[0]?.Status === 'Success') {
         const po = d[0].PostOffice[0];
-        // Use Name (city) first, fall back to District
-        const city = po.Name || po.District || '';
+        // Use District for city (more meaningful than post office name)
+        const city = po.District || po.Name || '';
         const state = po.State || '';
         if (state) { _pinSet(city, state); return; }
       }
