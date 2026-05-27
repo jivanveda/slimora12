@@ -1398,20 +1398,30 @@ async function fetchPincode(pin) {
   // Session cache hit
   if (_pinCache[pin]) { _pinSet(_pinCache[pin].city, _pinCache[pin].state); return; }
 
-  // API: server /api/pincode (pincode_db.json + postpincode.in fallback)
+  // L1: India Post official API — direct from browser (no server hop)
   try {
-    const r = await fetch(API_BASE + '/api/pincode/' + pin, { signal: AbortSignal.timeout(8000) });
+    const r = await fetch('https://api.postalpincode.in/pincode/' + pin, { signal: AbortSignal.timeout(6000) });
+    if (r.ok) {
+      const d = await r.json();
+      if (Array.isArray(d) && d[0]?.Status === 'Success' && d[0]?.PostOffice?.length) {
+        const po = d[0].PostOffice[0];
+        const city = po.District || po.Name || '';
+        const state = po.State || '';
+        if (state) { _pinCache[pin] = { city, state }; _pinSet(city, state); return; }
+      }
+    }
+  } catch(e) {}
+
+  // L2: server fallback (local pincode_db.json)
+  try {
+    const r = await fetch(API_BASE + '/api/pincode/' + pin, { signal: AbortSignal.timeout(6000) });
     if (r.ok) {
       const d = await r.json();
       if (d[0]?.Status === 'Success') {
         const po = d[0].PostOffice[0];
         const city = po.Name || po.District || '';
         const state = po.State || '';
-        if (state) {
-          _pinCache[pin] = { city, state };
-          _pinSet(city, state);
-          return;
-        }
+        if (state && city) { _pinCache[pin] = { city, state }; _pinSet(city, state); return; }
       }
     }
   } catch(e) {}
