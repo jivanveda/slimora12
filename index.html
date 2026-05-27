@@ -1369,22 +1369,20 @@ function updateSummary() {
   document.getElementById('sumTotal').textContent = '₹' + total.toLocaleString('en-IN');
 }
 
-// ── PINCODE — 3-LAYER BULLETPROOF ────────────────────────────────────
-// L1: pc.json (fetched once, cached in memory) — covers 23,915 pincodes
-// L2: your server /api/pincode  (local DB on server)
-// L3: api.postalpincode.in      (external last resort)
+// ── PINCODE — 2-LAYER (L3 dead api removed) ──────────────────────────
+// L1: pc.json (fetched once, cached in memory)
+// L2: server /api/pincode  (local DB + postpincode.in fallback + prefix guess)
+// NOTE: api.postalpincode.in SSL cert expired — removed from code
 let _pinValid = false;
-let _pcDB = null;        // cached after first load
+let _pcDB = null;
 let _pcLoading = false;
 
-// Pre-load pc.json silently on page ready (not blocking)
 async function _loadPcDB() {
   if (_pcDB || _pcLoading) return;
   _pcLoading = true;
   try {
     const r = await fetch(API_BASE + '/pc.json');
     const raw = await r.json();
-    // raw = {s:[states], d:[districts], p:{"pin":"sIdx,dIdx"}}
     _pcDB = raw;
   } catch(e) { _pcDB = null; }
   _pcLoading = false;
@@ -1417,30 +1415,21 @@ async function fetchPincode(pin) {
   hint.textContent = '📍 Dhundh rahe hain...';
   _pinValid = false;
 
-  // L1: local cache
+  // L1: local pc.json cache (instant)
   const local = _lookupLocal(pin);
   if (local) { _pinSet(local.district, local.state); return; }
 
-  // L2: server
+  // L2: server (handles DB + postpincode.in + prefix-guess fallback)
   try {
-    const r = await fetch(API_BASE + '/api/pincode/' + pin, {signal: AbortSignal.timeout(4000)});
+    const r = await fetch(API_BASE + '/api/pincode/' + pin, {signal: AbortSignal.timeout(6000)});
     if (r.ok) {
       const d = await r.json();
       if (d[0]?.Status === 'Success') {
         const po = d[0].PostOffice[0];
-        _pinSet(po.District, po.State); return;
-      }
-    }
-  } catch(e) {}
-
-  // L3: external API direct
-  try {
-    const r = await fetch('https://api.postalpincode.in/pincode/' + pin, {signal: AbortSignal.timeout(5000)});
-    if (r.ok) {
-      const d = await r.json();
-      if (d[0]?.Status === 'Success') {
-        const po = d[0].PostOffice[0];
-        _pinSet(po.District, po.State); return;
+        // Use Name (city) first, fall back to District
+        const city = po.Name || po.District || '';
+        const state = po.State || '';
+        if (state) { _pinSet(city, state); return; }
       }
     }
   } catch(e) {}
@@ -1454,13 +1443,13 @@ async function fetchPincode(pin) {
   _pinValid = false;
 }
 
-function _pinSet(district, state) {
-  document.getElementById('fcity').value  = district;
+function _pinSet(city, state) {
+  document.getElementById('fcity').value  = city;
   document.getElementById('fstate').value = state;
   document.getElementById('fpincode').classList.remove('err');
   const hint = document.getElementById('pincodeHint');
   hint.className = 'pincode-hint ok';
-  hint.textContent = '✅ ' + district + ', ' + state;
+  hint.textContent = '✅ ' + (city ? city + ', ' : '') + state;
   _pinValid = true;
 }
 

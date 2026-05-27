@@ -388,19 +388,33 @@ const _PIN_STATE = {
   '90':'Armed Forces','91':'Armed Forces','92':'Armed Forces','93':'Armed Forces','94':'Armed Forces',
 };
 
+// postalpincode.in SSL cert expired. postpincode.in is the working replacement.
+// Normalizes both responses to same format.
 function _fetchPincodeAPI(pin) {
   return new Promise((resolve, reject) => {
     const req = require('https').request({
-      hostname: 'api.postalpincode.in',
-      path: `/pincode/${pin}`,
+      hostname: 'www.postpincode.in',
+      path: `/api/getCityName.php?pincode=${pin}`,
       method: 'GET',
       timeout: 5000,
+      headers: { 'User-Agent': 'Mozilla/5.0' }
     }, (res) => {
       const chunks = [];
       res.on('data', c => chunks.push(c));
       res.on('end', () => {
-        try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8'))); }
-        catch(e) { reject(new Error('Invalid JSON')); }
+        try {
+          const data = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+          if (Array.isArray(data) && data.length > 0 && data[0].State) {
+            const d = data[0];
+            resolve([{ Status: 'Success', PostOffice: [{
+              Name: d.City || d.District || '',
+              District: d.District || '',
+              State: d.State
+            }]}]);
+          } else {
+            reject(new Error('No data'));
+          }
+        } catch(e) { reject(new Error('Invalid JSON')); }
       });
     });
     req.setTimeout(5000, () => { req.destroy(); reject(new Error('Timeout')); });
@@ -438,7 +452,7 @@ app.get('/api/pincode/:pin', async (req, res) => {
     const data = await _fetchPincodeAPI(pin);
     if (Array.isArray(data) && data[0]?.Status === 'Success' && data[0]?.PostOffice?.length > 0) {
       const po = data[0].PostOffice[0];
-      _pincodeCache.set(pin, { city: po.District || '', state: po.State || '', district: po.District || '', postOffice: po.Name || '' });
+      _pincodeCache.set(pin, { city: po.Name || po.District || '', state: po.State || '', district: po.District || '', postOffice: po.Name || '' });
       return res.json(data);
     }
   } catch(e) {
