@@ -331,12 +331,37 @@ app.get('/api/products', async (req, res) => {
   catch(e) { res.json({ success: false, error: e.message }); }
 });
 
+// ─── PINCODE — load local DB at startup ──────────────────────────────
+const fs   = require('fs');
+const path = require('path');
+let _pcDB  = {};
+try {
+  _pcDB = JSON.parse(fs.readFileSync(path.join(__dirname,'pincode_db.json'),'utf8'));
+  console.log(`✅ Pincode DB loaded: ${Object.keys(_pcDB).length} entries`);
+} catch(e) { console.warn('⚠️  pincode_db.json not found, will use external API only'); }
+
 app.get('/api/pincode/:pin', async (req, res) => {
+  const pin = String(req.params.pin).replace(/\D/g,'');
+  if (pin.length !== 6) return res.json([{ Status: 'Error', Message: 'Invalid pin' }]);
+
+  // Layer 1: local DB (instant)
+  const local = _pcDB[pin];
+  if (local?.state) {
+    return res.json([{ Status: 'Success', PostOffice: [{
+      Name: local.postOffice || local.city || '',
+      District: local.district || local.city || '',
+      State: local.state
+    }]}]);
+  }
+
+  // Layer 2: external API fallback
   try {
-    const resp = await nativeFetch(`https://api.postalpincode.in/pincode/${req.params.pin}`);
+    const resp = await nativeFetch(`https://api.postalpincode.in/pincode/${pin}`);
     const data = await resp.json();
-    res.json(data);
-  } catch(e) { res.json([{ Status: 'Error' }]); }
+    return res.json(data);
+  } catch(e) {
+    return res.json([{ Status: 'Error', Message: 'Pincode not found' }]);
+  }
 });
 
 app.get('/api/meta', async (req, res) => {
