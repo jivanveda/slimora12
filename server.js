@@ -431,7 +431,7 @@ app.get('/api/pincode/:pin', async (req, res) => {
   const local = _pcDB[pin];
   if (local?.state) {
     return res.json([{ Status: 'Success', PostOffice: [{
-      Name: local.postOffice || local.city || '',
+      Name: local.city || local.district || local.postOffice || '',
       District: local.district || local.city || '',
       State: local.state
     }]}]);
@@ -441,7 +441,7 @@ app.get('/api/pincode/:pin', async (req, res) => {
   const cached = _pincodeCache.get(pin);
   if (cached) {
     return res.json([{ Status: 'Success', PostOffice: [{
-      Name: cached.postOffice || cached.city || '',
+      Name: cached.city || cached.district || cached.postOffice || '',
       District: cached.district || cached.city || '',
       State: cached.state
     }]}]);
@@ -452,7 +452,7 @@ app.get('/api/pincode/:pin', async (req, res) => {
     const data = await _fetchPincodeAPI(pin);
     if (Array.isArray(data) && data[0]?.Status === 'Success' && data[0]?.PostOffice?.length > 0) {
       const po = data[0].PostOffice[0];
-      _pincodeCache.set(pin, { city: po.Name || po.District || '', state: po.State || '', district: po.District || '', postOffice: po.Name || '' });
+      _pincodeCache.set(pin, { city: po.District || po.Name || '', state: po.State || '', district: po.District || '', postOffice: po.Name || '' });
       return res.json(data);
     }
   } catch(e) {
